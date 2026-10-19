@@ -4,13 +4,13 @@ Read `docs/project-context.md`, `docs/prd.md`, `docs/architecture.md`, and
 `docs/development.md` before changing product behavior. `docs/README.md` indexes
 all source-of-truth documents. This instruction applies to the whole repository.
 
-The current user assignment is **foundation and planning**, then wait for next
-steps. Do not start MVP feature development or a live deployment as part of that
-assignment. The user approved all decisions in `docs/project-context.md`,
-including multi-organization tenancy, role model, invitation-only membership,
-per-layer visibility, GIS tokens, and Bun instead of Node/npm. Do not re-ask
-settled questions; ask one new question at a time if a material ambiguity
-remains.
+The foundation assignment is complete. The user instructed MVP planning review
+and implementation to begin on 2026-10-19. Do not infer authorization for a live
+deployment from that instruction. The user approved all decisions in
+`docs/project-context.md`, including multi-organization tenancy, role model,
+invitation-only membership, per-layer visibility, GIS tokens, and Bun instead of
+Node/npm. Do not re-ask settled questions; ask one new question at a time if a
+material ambiguity remains.
 
 Use Bun 1.4.3 and `bun.lock` for dependency management and scripts. Use
 Conventional Commits, full SHA action pins, and the checks in

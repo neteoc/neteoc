@@ -1,0 +1,44 @@
+---
+import { createSupabaseClient } from '../lib/supabase';
+
+const supabase = createSupabaseClient(Astro.request, Astro.cookies);
+const error = Astro.url.searchParams.get('error');
+Astro.response.headers.set('Cache-Control', 'private, no-store');
+Astro.response.headers.set('X-Robots-Tag', 'noindex');
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <title>Sign in | NetEOC</title>
+  </head>
+  <body>
+    <main>
+      <h1>Sign in</h1>
+      {supabase ? (
+        <>
+          <p>Enter the email address associated with your invitation.</p>
+          {error && (
+            <p role="alert">We could not start sign in. Please try again.</p>
+          )}
+          <form method="post" action="/auth/login">
+            <label for="email">Email address</label>
+            <input
+              id="email"
+              name="email"
+              type="email"
+              autocomplete="email"
+              required
+            />
+            <button type="submit">Email a sign-in link</button>
+          </form>
+        </>
+      ) : (
+        <p>Sign in is unavailable until a Supabase project is configured.</p>
+      )}
+    </main>
+  </body>
+</html>

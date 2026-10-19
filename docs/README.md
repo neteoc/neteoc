@@ -1,7 +1,8 @@
 # NetEOC documentation
 
-NetEOC means **Network Enhanced Operations Center**. This repository is at the
-foundation and planning stage; no operational application has been implemented.
+NetEOC means **Network Enhanced Operations Center**. This repository is in MVP
+development. The runtime and authentication shell is under construction; it is
+not an operational emergency response application.
 
 Read these documents in order:
 
@@ -12,10 +13,12 @@ Read these documents in order:
    contracts.
 4. [Technology research](research.md): primary sources, tradeoffs, and versions.
 5. [Development plan](development-plan.md): milestones and release gates.
-6. [Development guidelines](development.md): setup, checks, and contribution
+6. [MVP implementation contract](mvp-implementation-contract.md): build order,
+   boundary decisions, and verification matrix.
+7. [Development guidelines](development.md): setup, checks, and contribution
    rules.
-7. [Security](security.md): threat model, scanning, and reporting.
-8. [Repository status](status.md): completed work, verification, and next steps.
+8. [Security](security.md): threat model, scanning, and reporting.
+9. [Repository status](status.md): completed work, verification, and next steps.
 
 Keep substantive documentation here in Markdown. If PDFs become useful, put them
 in `docs/pdfs/` and link them from the relevant Markdown page. Do not copy

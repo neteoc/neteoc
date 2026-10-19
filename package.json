@@ -2,7 +2,7 @@
   "name": "neteoc",
   "version": "0.0.0",
   "private": true,
-  "description": "Network Enhanced Operations Center \u2014 repository foundation",
+  "description": "Network Enhanced Operations Center",
   "type": "module",
   "license": "MIT",
   "engines": {
@@ -10,13 +10,18 @@
   },
   "scripts": {
     "prepare": "bun run --bun husky",
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "node node_modules/wrangler/bin/wrangler.js dev",
+    "types:worker": "node node_modules/wrangler/bin/wrangler.js types",
+    "check:astro": "astro check",
     "format": "bun run --bun prettier --write .",
     "format:check": "bun run --bun prettier --check .",
     "lint": "bun run --bun eslint . --max-warnings 0",
     "lint:docs": "bun scripts/lint-docs.mjs",
     "check:policy": "bun scripts/check-policy.mjs",
     "test": "bun test ./tests",
-    "check": "bun run format:check && bun run lint && bun run lint:docs && bun run check:policy && bun run test",
+    "check": "bun run format:check && bun run lint && bun run lint:docs && bun run check:policy && bun run check:astro && bun run test && bun run build",
     "commitlint": "bun node_modules/@commitlint/cli/cli.js",
     "security:install": "python3 scripts/install-tools.py",
     "secrets:staged": "bun scripts/scan-secrets.mjs staged",
@@ -28,24 +33,34 @@
     "security:audit": "bun audit --audit-level high"
   },
   "devDependencies": {
-    "eslint": "10.13.0",
-    "@eslint/js": "10.0.1",
-    "globals": "17.13.0",
-    "prettier": "3.9.10",
-    "husky": "9.1.7",
-    "lint-staged": "17.6.0",
+    "@astrojs/check": "0.9.11",
     "@commitlint/cli": "21.2.4",
     "@commitlint/config-conventional": "21.2.4",
-    "yaml": "2.9.1",
-    "markdownlint": "0.42.0"
+    "@eslint/js": "10.0.1",
+    "eslint": "10.13.0",
+    "globals": "17.13.0",
+    "husky": "9.1.7",
+    "lint-staged": "17.6.0",
+    "markdownlint": "0.42.0",
+    "prettier": "3.9.10",
+    "prettier-plugin-astro": "1.1.1",
+    "typescript": "5.9.3",
+    "wrangler": "4.151.2",
+    "yaml": "2.9.1"
   },
   "lint-staged": {
     "*.{js,mjs,cjs}": [
       "bun run --bun eslint --max-warnings 0",
       "bun run --bun prettier --check"
     ],
-    "*.{json,jsonc,yml,yaml,md,css,html}": "bun run --bun prettier --check",
+    "*.{json,jsonc,yml,yaml,md,css,html,astro,ts,tsx}": "bun run --bun prettier --check",
     "*.md": "bun run lint:docs"
   },
-  "packageManager": "bun@1.4.3"
+  "packageManager": "bun@1.4.3",
+  "dependencies": {
+    "@astrojs/cloudflare": "14.4.1",
+    "@supabase/ssr": "0.12.7",
+    "@supabase/supabase-js": "2.118.0",
+    "astro": "7.4.1"
+  }
 }

@@ -1,0 +1,20 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "neteoc",
+  "main": "@astrojs/cloudflare/entrypoints/server",
+  "compatibility_date": "2026-10-19",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "upload_source_maps": true,
+  "vars": {
+    "SUPABASE_URL": "",
+    "SUPABASE_PUBLISHABLE_KEY": "",
+  },
+  "assets": {
+    "binding": "ASSETS",
+    "directory": "./dist",
+  },
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1,
+  },
+}

@@ -24,6 +24,16 @@
       "namespace_id": "770003",
       "simple": { "limit": 60, "period": 60 },
     },
+    {
+      "name": "VERIFY_IP_LIMIT",
+      "namespace_id": "770004",
+      "simple": { "limit": 30, "period": 60 },
+    },
+    {
+      "name": "VERIFY_GLOBAL_LIMIT",
+      "namespace_id": "770005",
+      "simple": { "limit": 60, "period": 60 },
+    },
   ],
   "assets": {
     "binding": "ASSETS",

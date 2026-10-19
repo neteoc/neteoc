@@ -1,5 +1,10 @@
 import { describe, expect, test } from 'bun:test';
-import { allowLogin, readLoginEmail, readSmallForm } from '../src/lib/login';
+import {
+  allowLogin,
+  allowVerify,
+  readLoginEmail,
+  readSmallForm,
+} from '../src/lib/login';
 
 function formRequest(
   body: string,
@@ -30,7 +35,7 @@ describe('login input boundary', () => {
   });
 });
 
-test('login limits use global, IP, then hashed email keys', async () => {
+test('login limits reject one IP before consuming shared buckets', async () => {
   const seen: string[] = [];
   const makeLimiter = (name: string, success: boolean) => ({
     async limit({ key }: { key: string }) {
@@ -41,12 +46,83 @@ test('login limits use global, IP, then hashed email keys', async () => {
   const request = formRequest('email=user%40example.org');
   const allowed = await allowLogin(request, 'user@example.org', {
     LOGIN_GLOBAL_LIMIT: makeLimiter('global', true),
-    LOGIN_IP_LIMIT: makeLimiter('ip', true),
-    LOGIN_EMAIL_LIMIT: makeLimiter('email', false),
+    LOGIN_IP_LIMIT: makeLimiter('ip', false),
+    LOGIN_EMAIL_LIMIT: makeLimiter('email', true),
   });
   expect(allowed).toBe(false);
-  expect(seen[0]).toBe('global:login');
-  expect(seen[1]).toBe('ip:192.0.2.10');
-  expect(seen[2]).toMatch(/^email:[0-9a-f]{64}$/);
-  expect(seen[2]).not.toContain('user@example.org');
+  expect(seen).toEqual(['ip:192.0.2.10']);
+});
+
+test('login limits hash email and consume global capacity last', async () => {
+  const seen: string[] = [];
+  const makeLimiter = (name: string) => ({
+    async limit({ key }: { key: string }) {
+      seen.push(`${name}:${key}`);
+      return { success: true };
+    },
+  });
+  const allowed = await allowLogin(
+    formRequest('email=user%40example.org'),
+    'user@example.org',
+    {
+      LOGIN_GLOBAL_LIMIT: makeLimiter('global'),
+      LOGIN_IP_LIMIT: makeLimiter('ip'),
+      LOGIN_EMAIL_LIMIT: makeLimiter('email'),
+    },
+  );
+  expect(allowed).toBe(true);
+  expect(seen[0]).toBe('ip:192.0.2.10');
+  expect(seen[1]).toMatch(/^email:[0-9a-f]{64}$/);
+  expect(seen[1]).not.toContain('user@example.org');
+  expect(seen[2]).toBe('global:login');
+});
+
+test('email throttling leaves global capacity for other responders', async () => {
+  const seen: string[] = [];
+  const allowed = await allowLogin(
+    formRequest('email=user%40example.org'),
+    'user@example.org',
+    {
+      LOGIN_IP_LIMIT: {
+        async limit() {
+          seen.push('ip');
+          return { success: true };
+        },
+      },
+      LOGIN_EMAIL_LIMIT: {
+        async limit() {
+          seen.push('email');
+          return { success: false };
+        },
+      },
+      LOGIN_GLOBAL_LIMIT: {
+        async limit() {
+          seen.push('global');
+          return { success: true };
+        },
+      },
+    },
+  );
+  expect(allowed).toBe(false);
+  expect(seen).toEqual(['ip', 'email']);
+});
+
+test('code verification uses independent IP and global buckets', async () => {
+  const seen: string[] = [];
+  const allowed = await allowVerify(formRequest('email=user%40example.org'), {
+    VERIFY_IP_LIMIT: {
+      async limit({ key }) {
+        seen.push(`ip:${key}`);
+        return { success: true };
+      },
+    },
+    VERIFY_GLOBAL_LIMIT: {
+      async limit({ key }) {
+        seen.push(`global:${key}`);
+        return { success: true };
+      },
+    },
+  });
+  expect(allowed).toBe(true);
+  expect(seen).toEqual(['ip:192.0.2.10', 'global:verify']);
 });

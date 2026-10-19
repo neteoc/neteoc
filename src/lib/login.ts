@@ -6,6 +6,11 @@ export interface LoginLimiters {
   LOGIN_EMAIL_LIMIT: Limiter;
 }
 
+export interface VerifyLimiters {
+  VERIFY_GLOBAL_LIMIT: Limiter;
+  VERIFY_IP_LIMIT: Limiter;
+}
+
 const MAX_FORM_BYTES = 4096;
 
 export async function readSmallForm(
@@ -63,16 +68,28 @@ export async function allowLogin(
   limiters: LoginLimiters,
 ): Promise<boolean> {
   const ip = request.headers.get('CF-Connecting-IP') ?? 'unknown';
+  const perIp = await limiters.LOGIN_IP_LIMIT.limit({ key: ip });
+  if (!perIp.success) return false;
+
   const emailBytes = new TextEncoder().encode(email);
   const digest = await crypto.subtle.digest('SHA-256', emailBytes);
   const emailHash = Array.from(new Uint8Array(digest), (byte) =>
     byte.toString(16).padStart(2, '0'),
   ).join('');
 
-  const global = await limiters.LOGIN_GLOBAL_LIMIT.limit({ key: 'login' });
-  if (!global.success) return false;
-  const perIp = await limiters.LOGIN_IP_LIMIT.limit({ key: ip });
-  if (!perIp.success) return false;
   const perEmail = await limiters.LOGIN_EMAIL_LIMIT.limit({ key: emailHash });
-  return perEmail.success;
+  if (!perEmail.success) return false;
+  const global = await limiters.LOGIN_GLOBAL_LIMIT.limit({ key: 'login' });
+  return global.success;
+}
+
+export async function allowVerify(
+  request: Request,
+  limiters: VerifyLimiters,
+): Promise<boolean> {
+  const ip = request.headers.get('CF-Connecting-IP') ?? 'unknown';
+  const perIp = await limiters.VERIFY_IP_LIMIT.limit({ key: ip });
+  if (!perIp.success) return false;
+  const global = await limiters.VERIFY_GLOBAL_LIMIT.limit({ key: 'verify' });
+  return global.success;
 }

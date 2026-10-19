@@ -28,12 +28,16 @@ export const POST: APIRoute = async ({ request, locals, redirect, url }) => {
         emailRedirectTo: `${url.origin}/auth/confirm`,
       },
     });
-    if (error && (error.status === 429 || (error.status ?? 0) >= 500)) {
+    if (
+      error &&
+      (error.status === 0 || error.status === 429 || (error.status ?? 0) >= 500)
+    ) {
       console.error('auth_otp_provider_unavailable', {
         status: error.status,
         code: error.code,
       });
-      return redirect('/login?error=unavailable', 303);
+      if (error.status !== 429)
+        return redirect('/login?error=unavailable', 303);
     }
   } catch {
     console.error('auth_otp_provider_unreachable');

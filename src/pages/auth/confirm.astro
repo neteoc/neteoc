@@ -1,10 +1,20 @@
 ---
 import { env } from 'cloudflare:workers';
 import {
-  allowLogin,
+  allowVerify,
   normalizeLoginEmail,
   readSmallForm,
 } from '../../lib/login';
+
+const errorCode = Astro.url.searchParams.get('error');
+const errorMessage =
+  errorCode === 'invalid'
+    ? 'That code is invalid or has expired. Check the email and try again.'
+    : errorCode === 'rate'
+      ? 'Please wait before checking another sign-in code.'
+      : errorCode === 'unavailable'
+        ? 'Code verification is temporarily unavailable. Try again shortly.'
+        : null;
 
 if (Astro.request.method === 'POST') {
   const supabase = Astro.locals.supabase;
@@ -15,17 +25,17 @@ if (Astro.request.method === 'POST') {
   const email = form ? normalizeLoginEmail(form) : null;
   const tokens = form?.getAll('token') ?? [];
   if (!email || tokens.length !== 1 || !/^\d{6}$/.test(tokens[0])) {
-    return Astro.redirect('/login?error=invalid', 303);
+    return Astro.redirect('/auth/confirm?error=invalid', 303);
   }
 
   try {
-    if (!(await allowLogin(Astro.request, email, env))) {
+    if (!(await allowVerify(Astro.request, env))) {
       console.warn('auth_verify_rate_limited');
-      return Astro.redirect('/login?error=rate', 303);
+      return Astro.redirect('/auth/confirm?error=rate', 303);
     }
   } catch {
     console.error('auth_verify_limiter_unavailable');
-    return Astro.redirect('/login?error=unavailable', 303);
+    return Astro.redirect('/auth/confirm?error=unavailable', 303);
   }
 
   try {
@@ -35,18 +45,22 @@ if (Astro.request.method === 'POST') {
       type: 'email',
     });
     if (error) {
-      if (error.status === 429 || (error.status ?? 0) >= 500) {
+      if (
+        error.status === 0 ||
+        error.status === 429 ||
+        (error.status ?? 0) >= 500
+      ) {
         console.error('auth_verify_provider_unavailable', {
           status: error.status,
           code: error.code,
         });
-        return Astro.redirect('/login?error=unavailable', 303);
+        return Astro.redirect('/auth/confirm?error=unavailable', 303);
       }
-      return Astro.redirect('/login?error=invalid', 303);
+      return Astro.redirect('/auth/confirm?error=invalid', 303);
     }
   } catch {
     console.error('auth_verify_provider_unreachable');
-    return Astro.redirect('/login?error=unavailable', 303);
+    return Astro.redirect('/auth/confirm?error=unavailable', 303);
   }
   return Astro.redirect('/app', 303);
 }
@@ -64,6 +78,7 @@ if (Astro.request.method === 'POST') {
     <main>
       <h1>Confirm sign in</h1>
       <p>Enter the email address and code from your sign-in email.</p>
+      {errorMessage && <p role="alert">{errorMessage}</p>}
       <form method="post" action="/auth/confirm">
         <label for="email">Email address</label>
         <input

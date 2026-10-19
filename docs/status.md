@@ -7,8 +7,9 @@ Astro/Cloudflare Worker shell, cookie-backed Supabase sign-in routes, and
 verified-claim protection for `/app`. The user designated
 [`NetEOC Dev`](https://supabase.com/dashboard/project/mssluxsybusndqxdgica) as
 the development/preview Supabase project. Its active publishable key and API URL
-are present only in an ignored local `.dev.vars` file. No Cloudflare Worker,
-Postmark integration, or production deployment has been created. The
+are present only in an ignored local `.dev.vars` file. No Cloudflare Worker or
+production deployment has been created. The development project sends Auth email
+through a dedicated `NetEOC Dev` Postmark server. The
 [implementation contract](mvp-implementation-contract.md) records remaining
 architecture gates.
 
@@ -28,16 +29,18 @@ confirming that this request did not create an account. `bun run check` passed
 with Bun 1.4.3, including Astro diagnostics and the Worker build. Bun audit,
 Semgrep, and Trivy reported no high or critical findings in this slice.
 
-The project is healthy, with no application tables or migrations. PostGIS is not
-yet installed. Its security advisor flags `public.rls_auto_enable()` as a
-`SECURITY DEFINER` function executable by anonymous and authenticated roles; the
-corresponding event trigger is not installed. Revoke unnecessary execute
-privileges in the first tracked schema migration and rerun the advisor. The
-development Auth Site URL is `http://localhost:8787`, and the exact
-`/auth/confirm` redirect is allowed. The Magic Link OTP email template remains
-at its default because Supabase's Free plan requires custom SMTP before editing
-it. The full email/code/session flow and invitation acceptance remain
-unverified. A dedicated NetEOC email sender is still needed.
+The project is healthy, with no application tables. PostGIS is not yet
+installed. The first tracked migration removed `PUBLIC`, `anon`, and
+`authenticated` execute privileges from the pre-existing
+`public.rls_auto_enable()` event-trigger helper; negative privilege checks pass
+and the security advisor no longer flags the function. The corresponding event
+trigger is not installed, so each future table migration must enable RLS
+explicitly. The development Auth Site URL is `http://localhost:8787`, and the
+exact `/auth/confirm` redirect is allowed. Custom SMTP and the code-only Magic
+Link OTP template are configured. A local sign-in request produced a Postmark
+`Delivered` event. Code confirmation, session refresh, sign-out, and invitation
+acceptance remain unverified. A verified NetEOC sender is needed before a pilot;
+the development project currently uses a temporary sender.
 
 The foundation's actionlint, TruffleHog tree and history scans, and CI passed at
 the previous checkpoint. The initial commit predates the Conventional Commit

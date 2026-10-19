@@ -62,14 +62,16 @@ sign-out fails.
 
 ## Rate limits and operations
 
-Cloudflare rate-limit bindings bound sign-in requests and code checks together
-to 30 per IP, 5 per normalized email, and 60 globally per minute. They reduce
-abuse but are location-local and eventually consistent; they are not exact quota
-accounting. Tune the limits against pilot traffic and the selected SMTP
-provider. The default Supabase SMTP is not sufficient for real invitations or
-incident use; configure a dedicated NetEOC Postmark server before a pilot.
-Operator logs record rate-limit and provider failure categories/status codes
-without email addresses or tokens.
+Cloudflare rate-limit bindings bound sign-in requests to 30 per IP, 5 per
+normalized email, and 60 globally per minute. IP and email checks run before the
+global check so one throttled client cannot exhaust shared capacity. Code
+verification has separate limits of 30 per IP and 60 globally per minute; a
+sign-in request cannot exhaust the verification buckets. These limits are
+location-local and eventually consistent, not exact quota accounting. Tune them
+against pilot traffic and the SMTP provider. The default Supabase SMTP is not
+sufficient for real invitations or incident use; use a dedicated NetEOC Postmark
+server before a pilot. Operator logs record rate-limit and provider failure
+categories/status codes without email addresses or tokens.
 
 Test the full request, email, confirmation, refresh, and sign-out sequence
 against a local or preview Supabase project before considering authentication

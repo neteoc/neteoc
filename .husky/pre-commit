@@ -1,0 +1,3 @@
+bun run secrets:staged
+bun run staged
+bun run check:policy

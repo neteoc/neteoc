@@ -1,0 +1,14 @@
+scanners:
+  - vuln
+  - misconfig
+  - secret
+severity:
+  - HIGH
+  - CRITICAL
+exit-code: 1
+skip-dirs:
+  - node_modules
+  - .tools
+  - .git
+  - coverage
+  - dist

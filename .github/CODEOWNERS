@@ -1,0 +1,2 @@
+# Assign protected application and policy files to the maintainers team when configured.
+# Until a team exists, GitHub repository permissions and branch protection govern review.

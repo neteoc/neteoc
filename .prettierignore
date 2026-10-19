@@ -5,4 +5,5 @@ coverage/
 dist/
 .astro/
 .wrangler/
+worker-configuration.d.ts
 .husky/_/

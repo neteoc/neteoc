@@ -1,7 +1,9 @@
 # MVP development plan
 
-This is the next-phase plan. Work starts only after the user gives next steps.
-Each milestone should result in a small reviewable PR, tested against the PRD.
+MVP work began after the user's 2026-10-19 instruction. Each milestone should
+result in a small reviewable PR, tested against the PRD. The
+[implementation contract](mvp-implementation-contract.md) records dependencies
+and boundary decisions for these phases.
 
 | Phase              | Main work                                                                                                | Exit evidence                                                                                        |
 | ------------------ | -------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
@@ -31,6 +33,6 @@ protected branch and environment approval. Store only scoped credentials in
 GitHub secrets; prefer OIDC/provider-native short-lived credentials when
 supported.
 
-The immediate next instruction can select the first implementation slice. The
-foundation does not create a live Supabase project, Cloudflare Worker, or
-Postmark sender and does not deploy code.
+Phase 1 begins with a local Worker runtime and authentication shell. A live
+Supabase project, Cloudflare Worker, and Postmark sender are not required for
+that first local slice.

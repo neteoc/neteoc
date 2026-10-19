@@ -1,5 +1,3 @@
 [install]
 exact = true
-
-[run]
-bun = true
+minimumReleaseAge = 518400 # 6 days

@@ -3,7 +3,17 @@
 ## Local setup
 
 Install [Bun 1.4.3](https://bun.sh/docs/installation) (see `.bun-version`),
-Python 3, and Git. On Linux x86_64, run:
+Python 3, and Git. Local Worker preview and Worker type generation also require
+Node.js 22 or later for the Wrangler CLI. This is a tooling exception: Bun
+remains the package manager, script runner, and test runner. The repo leaves
+`[run] bun` unset in `bunfig.toml` so `bun run preview` and
+`bun run types:worker` invoke Wrangler through real Node.js. Wrangler does not
+support running its CLI under Bun. Give Wrangler a writable `XDG_CONFIG_HOME`
+where the default config directory is read-only. `bun run check` builds the
+Worker and starts a local Wrangler preview to test protected route redirects and
+cross-origin POST denial. Keep the Worker compatibility date no newer than the
+version supported by the locked `workerd` package. Application code still
+targets Cloudflare Workers. On Linux x86_64, run:
 
 ```sh
 bun install --frozen-lockfile
@@ -35,10 +45,15 @@ and lint, and validates repository policy; `pre-push` runs the full local check.
 Hooks can be skipped locally, so protected branch CI is the merge gate.
 
 PRs should explain behavior, migration or access implications, and validation.
-Keep scope small. Do not place credentials, live incident data, addresses of
-real people, or private photos in fixtures. Use synthetic data. Never commit
-`.env`, `.dev.vars`, private keys, or service-role keys. Treat third-party feed
-content and linked documents as untrusted input.
+Once a database migration is applied to any shared project, treat that file as
+immutable. Make subsequent changes in a new, forward-only migration so source
+history matches the SQL that ran. The first `rls_auto_enable` migration is a
+recorded exception: its source was guarded after application to NetEOC Dev so
+fresh local databases without the bootstrap helper can run it. Its effect on
+NetEOC Dev remains the same. Keep scope small. Do not place credentials, live
+incident data, addresses of real people, or private photos in fixtures. Use
+synthetic data. Never commit `.env`, `.dev.vars`, private keys, or service-role
+keys. Treat third-party feed content and linked documents as untrusted input.
 
 ## Source and test rules
 
@@ -53,10 +68,18 @@ sensitive payloads.
 
 Before adding a package or Action, check its current supported release and
 license, use an exact package version, update `bun.lock`, and scan dependencies.
-Actions must have full 40-character SHA references with version comments. Keep
-permissions at workflow/job minimum; untrusted PRs get no deployment
-credentials. Run `actionlint` and policy checks when editing workflows. Review
-dependency advisories and note the reason and expiry for any exception.
+`bunfig.toml` requires newly resolved package versions to be at least six days
+old (518,400 seconds). `bun.lock` was regenerated under this rule; frozen
+installs continue to use its exact versions. Do not add blanket age-gate
+exceptions for dependencies. For an urgent fix to a specific security advisory,
+an exact `name@version` entry in Bun's
+[`minimumReleaseAgeExcludes`](https://bun.sh/docs/pm/cli/install#minimum-release-age)
+may bypass the age gate after review. Record the advisory, reason, and expiry,
+then remove the exception when the release reaches six days. Actions must have
+full 40-character SHA references with version comments. Keep permissions at
+workflow/job minimum; untrusted PRs get no deployment credentials. Run
+`actionlint` and policy checks when editing workflows. Review dependency
+advisories and note the reason and expiry for any exception.
 
 Formatting: Prettier for JS, JSON, YAML, and Markdown; markdownlint for prose;
 ESLint for JS; add `astro check`, TypeScript, and framework-aware lint when the

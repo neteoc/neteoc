@@ -37,9 +37,9 @@ specialized emergency dispatch, medical, or fleet-management product.
 - Pin GitHub Actions to full commit SHAs; look up the latest stable release
   before selecting a pin. Add prudent testing, hooks, linting, analysis, and
   security and secret scanning.
-- Current assignment: establish the repository, research, guardrails, high-level
-  PRD, and development plan, then **wait for the next instruction**. Do not
-  begin building the MVP as part of this assignment.
+- The foundation assignment ended when the user instructed MVP planning review
+  and implementation to begin on 2026-10-19. Continue to honor the approved
+  product decisions below.
 
 ## Accepted clarification decisions
 

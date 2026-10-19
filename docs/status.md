@@ -1,13 +1,17 @@
 # Repository status
 
-PR #2 merged on October 19, 2026. The first tenant read boundary is underway on
-`codex/mvp-tenant-kernel`: NetEOC Dev now has organizations and memberships with
-RLS, member-only organization reads, self-only membership reads, and no
-application writes. Direct SQL allow/deny tests passed and rolled back their
-fixtures; CI now runs them against PostgreSQL. The workspace lists only
-organizations returned by the user-scoped client, with IDs to distinguish
-duplicate names. Bootstrap, invitations, membership mutation, and full sign-in
-session testing remain next steps. See [Tenant kernel](tenant-kernel.md).
+PR #4 merged on October 19, 2026. The first tenant read boundary is complete:
+NetEOC Dev now has organizations and memberships with RLS, member-only
+organization reads, self-only membership reads, and no application writes.
+Direct SQL allow/deny tests passed and rolled back their fixtures; CI now runs
+them against PostgreSQL. The workspace lists only organizations returned by the
+user-scoped client, with IDs to distinguish duplicate names. The next slice adds
+an operator-only, audited bootstrap path for the first platform admin and
+organization admin. Its transactional SQL test passed on NetEOC Dev and rolled
+back every fixture; no real admins or organizations were created. Invitations,
+membership mutation, and full sign-in session testing remain next steps. See
+[Tenant kernel](tenant-kernel.md) and
+[Operator bootstrap](operator-bootstrap.md).
 
 As of 2026-10-19, the foundation and MVP plan were merged in
 [PR #1](https://github.com/neteoc/neteoc/pull/1). The user subsequently asked

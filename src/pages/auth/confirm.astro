@@ -2,6 +2,9 @@
 import { env } from 'cloudflare:workers';
 import {
   allowVerify,
+  EMAIL_OTP_LENGTH,
+  EMAIL_OTP_PATTERN,
+  isValidEmailOtp,
   normalizeLoginEmail,
   readSmallForm,
 } from '../../lib/login';
@@ -24,7 +27,7 @@ if (Astro.request.method === 'POST') {
   const form = await readSmallForm(Astro.request);
   const email = form ? normalizeLoginEmail(form) : null;
   const tokens = form?.getAll('token') ?? [];
-  if (!email || tokens.length !== 1 || !/^\d{6}$/.test(tokens[0])) {
+  if (!email || tokens.length !== 1 || !isValidEmailOtp(tokens[0])) {
     return Astro.redirect('/auth/confirm?error=invalid', 303);
   }
 
@@ -93,8 +96,8 @@ if (Astro.request.method === 'POST') {
           id="token"
           name="token"
           inputmode="numeric"
-          pattern="[0-9]{6}"
-          maxlength="6"
+          pattern={EMAIL_OTP_PATTERN}
+          maxlength={EMAIL_OTP_LENGTH}
           required
         />
         <button type="submit">Continue to NetEOC</button>

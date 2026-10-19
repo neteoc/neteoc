@@ -12,6 +12,12 @@ export interface VerifyLimiters {
 }
 
 const MAX_FORM_BYTES = 4096;
+export const EMAIL_OTP_LENGTH = 8;
+export const EMAIL_OTP_PATTERN = `[0-9]{${EMAIL_OTP_LENGTH}}`;
+
+export function isValidEmailOtp(value: string): boolean {
+  return new RegExp(`^${EMAIL_OTP_PATTERN}$`).test(value);
+}
 
 export async function readSmallForm(
   request: Request,

@@ -45,10 +45,15 @@ and lint, and validates repository policy; `pre-push` runs the full local check.
 Hooks can be skipped locally, so protected branch CI is the merge gate.
 
 PRs should explain behavior, migration or access implications, and validation.
-Keep scope small. Do not place credentials, live incident data, addresses of
-real people, or private photos in fixtures. Use synthetic data. Never commit
-`.env`, `.dev.vars`, private keys, or service-role keys. Treat third-party feed
-content and linked documents as untrusted input.
+Once a database migration is applied to any shared project, treat that file as
+immutable. Make subsequent changes in a new, forward-only migration so source
+history matches the SQL that ran. The first `rls_auto_enable` migration is a
+recorded exception: its source was guarded after application to NetEOC Dev so
+fresh local databases without the bootstrap helper can run it. Its effect on
+NetEOC Dev remains the same. Keep scope small. Do not place credentials, live
+incident data, addresses of real people, or private photos in fixtures. Use
+synthetic data. Never commit `.env`, `.dev.vars`, private keys, or service-role
+keys. Treat third-party feed content and linked documents as untrusted input.
 
 ## Source and test rules
 

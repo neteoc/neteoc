@@ -2,6 +2,9 @@ import { describe, expect, test } from 'bun:test';
 import {
   allowLogin,
   allowVerify,
+  EMAIL_OTP_LENGTH,
+  EMAIL_OTP_PATTERN,
+  isValidEmailOtp,
   readLoginEmail,
   readSmallForm,
 } from '../src/lib/login';
@@ -33,6 +36,15 @@ describe('login input boundary', () => {
     ).toBeNull();
     expect(await readSmallForm(formRequest('x'.repeat(4097)))).toBeNull();
   });
+});
+
+test('email OTP input and server validation share the configured length', () => {
+  expect(EMAIL_OTP_LENGTH).toBe(8);
+  expect(EMAIL_OTP_PATTERN).toBe('[0-9]{8}');
+  expect(isValidEmailOtp('12345678')).toBe(true);
+  expect(isValidEmailOtp('123456')).toBe(false);
+  expect(isValidEmailOtp('123456789')).toBe(false);
+  expect(isValidEmailOtp('1234abcd')).toBe(false);
 });
 
 test('login limits reject one IP before consuming shared buckets', async () => {

@@ -74,6 +74,15 @@ try {
       `${route} must not be indexed`,
     );
   }
+  const confirmPage = await fetch(`${origin}/auth/confirm`);
+  assert(confirmPage.status === 200, 'confirmation form must render');
+  const confirmHtml = await confirmPage.text();
+  assert(
+    /name="token"[^>]*pattern="\[0-9\]\{8\}"[^>]*maxlength="8"/.test(
+      confirmHtml,
+    ),
+    'confirmation form must accept eight-digit codes',
+  );
   for (const route of ['/auth/login', '/auth/confirm']) {
     const response = await fetch(`${origin}${route}`, {
       method: 'POST',

@@ -41,11 +41,11 @@ and email link scanners cannot consume the code through a GET. Keep codes out of
 request logs and do not add third-party assets or analytics to the confirmation
 page.
 
-For local verification, add the exact preview origin used by Wrangler, such as
-`http://localhost:8787/auth/confirm`, to the development project's redirect
-allow list. Configure a hosted preview URL separately when one exists. The
-dashboard's Site URL should also point to an intended application origin, rather
-than Supabase's default localhost value, before using email invitations.
+The development project's Site URL is `http://localhost:8787`, and its redirect
+allow list includes exactly `http://localhost:8787/auth/confirm`. Configure a
+hosted preview URL separately when one exists. The Magic Link template remains
+at its default until custom SMTP is configured; on the project's Free plan,
+Supabase does not allow editing the template with its default email service.
 
 The app sets `HttpOnly`, `Secure`, `SameSite=Lax`, and a seven-day maximum age
 on Supabase session cookies. Secure cookies require HTTPS outside browser
@@ -60,9 +60,9 @@ to 30 per IP, 5 per normalized email, and 60 globally per minute. They reduce
 abuse but are location-local and eventually consistent; they are not exact quota
 accounting. Tune the limits against pilot traffic and the selected SMTP
 provider. The default Supabase SMTP is not sufficient for real invitations or
-incident use; configure the approved Postmark SMTP before a pilot. Operator logs
-record rate-limit and provider failure categories/status codes without email
-addresses or tokens.
+incident use; configure a dedicated NetEOC Postmark server before a pilot.
+Operator logs record rate-limit and provider failure categories/status codes
+without email addresses or tokens.
 
 Test the full request, email, confirmation, refresh, and sign-out sequence
 against a local or preview Supabase project before considering authentication

@@ -33,9 +33,11 @@ yet installed. Its security advisor flags `public.rls_auto_enable()` as a
 `SECURITY DEFINER` function executable by anonymous and authenticated roles; the
 corresponding event trigger is not installed. Revoke unnecessary execute
 privileges in the first tracked schema migration and rerun the advisor. The
-Magic Link OTP email template, redirect allow list, full email/code/session
-flow, and invitation acceptance remain unverified. Dashboard authentication is
-needed to configure the Auth settings.
+development Auth Site URL is `http://localhost:8787`, and the exact
+`/auth/confirm` redirect is allowed. The Magic Link OTP email template remains
+at its default because Supabase's Free plan requires custom SMTP before editing
+it. The full email/code/session flow and invitation acceptance remain
+unverified. A dedicated NetEOC email sender is still needed.
 
 The foundation's actionlint, TruffleHog tree and history scans, and CI passed at
 the previous checkpoint. The initial commit predates the Conventional Commit

@@ -1,5 +1,13 @@
 # Repository status
 
+PR #2 merged on October 19, 2026. The first tenant read boundary is underway on
+`codex/mvp-tenant-kernel`: NetEOC Dev now has organizations and memberships with
+RLS, authenticated self/member reads, and no application writes. Direct SQL
+allow/deny tests passed and rolled back their fixtures. The workspace now lists
+only organizations returned by the user-scoped client. Bootstrap, invitations,
+membership mutation, and full sign-in session testing remain next steps. See
+[Tenant kernel](tenant-kernel.md).
+
 As of 2026-10-19, the foundation and MVP plan were merged in
 [PR #1](https://github.com/neteoc/neteoc/pull/1). The user subsequently asked
 for a planning review and for MVP work to begin. The first local slice adds an

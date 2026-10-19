@@ -5,11 +5,12 @@
 Install [Bun 1.4.3](https://bun.sh/docs/installation) (see `.bun-version`),
 Python 3, and Git. Local Worker preview and Worker type generation also require
 Node.js 22 or later for the Wrangler CLI. This is a tooling exception: Bun
-remains the package manager, script runner, and test runner. The pinned Wrangler
-version accepts a type-generation command under Bun but its local preview server
-did not respond to requests in our verification, and Wrangler warns that Bun is
-unsupported. Application code still targets Cloudflare Workers. On Linux x86_64,
-run:
+remains the package manager, script runner, and test runner. Run local preview
+with `node node_modules/wrangler/bin/wrangler.js dev` and a writable
+`XDG_CONFIG_HOME`; Wrangler does not support running its CLI under Bun. Keep the
+Worker compatibility date no newer than the version supported by the locked
+`workerd` package. Application code still targets Cloudflare Workers. On Linux
+x86_64, run:
 
 ```sh
 bun install --frozen-lockfile

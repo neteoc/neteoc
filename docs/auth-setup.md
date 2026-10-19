@@ -43,9 +43,16 @@ page.
 
 The development project's Site URL is `http://localhost:8787`, and its redirect
 allow list includes exactly `http://localhost:8787/auth/confirm`. Configure a
-hosted preview URL separately when one exists. The Magic Link template remains
-at its default until custom SMTP is configured; on the project's Free plan,
-Supabase does not allow editing the template with its default email service.
+hosted preview URL separately when one exists. Its Magic Link or OTP template
+uses the code-only body above with subject `Your NetEOC sign-in code`. Custom
+SMTP is enabled through the dedicated `NetEOC Dev` Postmark server (ID
+`21138589`, transactional stream `outbound`) at `smtp.postmarkapp.com:587`. The
+temporary verified sender is `kerry@kerryhatcher.com`; replace it with a
+verified NetEOC sender before a pilot. The server token is stored in Supabase
+SMTP settings and must not be committed or copied into Worker bindings. On
+October 19, 2026, a local sign-in request for an existing Auth user produced a
+Postmark `Delivered` event. Code confirmation, session refresh, and sign-out
+still need end-to-end testing.
 
 The app sets `HttpOnly`, `Secure`, `SameSite=Lax`, and a seven-day maximum age
 on Supabase session cookies. Secure cookies require HTTPS outside browser

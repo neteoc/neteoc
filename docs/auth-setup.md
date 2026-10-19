@@ -16,6 +16,13 @@ For local development, copy `.dev.vars.example` to ignored `.dev.vars` and
 replace both values. `bun run types:worker` regenerates the binding types when
 `wrangler.jsonc` changes. No live deployment is part of this setup.
 
+The development/preview project is
+[`NetEOC Dev`](https://supabase.com/dashboard/project/mssluxsybusndqxdgica)
+(`mssluxsybusndqxdgica`). Its API URL is
+`https://mssluxsybusndqxdgica.supabase.co`. Use an active `sb_publishable_` key
+from Project Settings → API Keys; never commit the key or substitute a
+service-role key. The local `.dev.vars` file is ignored by Git.
+
 ## Sign-in email template
 
 Configure the Supabase **Magic Link** email template for each connected project.
@@ -33,6 +40,12 @@ credential; the user enters the code and email address on the confirmation page.
 and email link scanners cannot consume the code through a GET. Keep codes out of
 request logs and do not add third-party assets or analytics to the confirmation
 page.
+
+For local verification, add the exact preview origin used by Wrangler, such as
+`http://localhost:8787/auth/confirm`, to the development project's redirect
+allow list. Configure a hosted preview URL separately when one exists. The
+dashboard's Site URL should also point to an intended application origin, rather
+than Supabase's default localhost value, before using email invitations.
 
 The app sets `HttpOnly`, `Secure`, `SameSite=Lax`, and a seven-day maximum age
 on Supabase session cookies. Secure cookies require HTTPS outside browser

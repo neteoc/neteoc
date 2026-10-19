@@ -16,9 +16,9 @@ Trivy for vulnerable dependencies, configuration, and secrets, and Semgrep for
 source patterns. Local hooks run the staged secret scan; CI repeats checks on
 complete PR commits. Checks are fail-closed, and all scan tooling is versioned.
 The GitHub workflow uses read-only permissions for PR jobs and no production
-secrets. GitHub branch protection and native secret scanning should be enabled
-in repository settings as an additional merge boundary. Setup status is tracked
-in [status](status.md).
+secrets. GitHub branch protection and native secret scanning are enabled in
+repository settings as an additional merge boundary. Setup status is tracked in
+[status](status.md).
 
 Security review is required before production for database grants/RLS, Storage
 policies, server-side GIS token verification, external feed fetching, export

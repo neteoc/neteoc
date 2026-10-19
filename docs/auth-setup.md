@@ -54,6 +54,11 @@ October 19, 2026, a local sign-in request for an existing Auth user produced a
 Postmark `Delivered` event. Code confirmation, session refresh, and sign-out
 still need end-to-end testing.
 
+Set **Authentication → Sign In / Providers → Email → Email OTP expiration** to
+`600` seconds (10 minutes) for every connected project. The development project
+uses this value, reduced from its initial 3,600-second setting on October
+19, 2026. Keep the email OTP length at eight digits.
+
 The app sets `HttpOnly`, `Secure`, `SameSite=Lax`, and a seven-day maximum age
 on Supabase session cookies. Secure cookies require HTTPS outside browser
 localhost exceptions. Authentication responses are private and no-store.
@@ -67,11 +72,19 @@ normalized email, and 60 globally per minute. IP and email checks run before the
 global check so one throttled client cannot exhaust shared capacity. Code
 verification has separate limits of 30 per IP and 60 globally per minute; a
 sign-in request cannot exhaust the verification buckets. These limits are
-location-local and eventually consistent, not exact quota accounting. Tune them
-against pilot traffic and the SMTP provider. The default Supabase SMTP is not
-sufficient for real invitations or incident use; use a dedicated NetEOC Postmark
-server before a pilot. Operator logs record rate-limit and provider failure
-categories/status codes without email addresses or tokens.
+location-local and eventually consistent, not exact quota accounting. The
+verification path deliberately has no per-email bucket, so guesses against a
+single address remain bounded by its ten-minute OTP lifetime and the IP and
+shared verification limits. Two clients at the per-IP cap can exhaust the shared
+60-per-minute verification bucket in one Cloudflare location and delay
+legitimate confirmations there. Monitor throttling during the pilot and revisit
+the shared limit or add stronger abuse controls if this occurs. Sign-in's
+per-email bucket also permits targeted delays to that address; monitor that
+trade-off alongside provider delivery. Tune limits against pilot traffic and the
+SMTP provider. The default Supabase SMTP is not sufficient for real invitations
+or incident use; use a dedicated NetEOC Postmark server before a pilot. Operator
+logs record rate-limit and provider failure categories/status codes without
+email addresses or tokens.
 
 Test the full request, email, confirmation, refresh, and sign-out sequence
 against a local or preview Supabase project before considering authentication

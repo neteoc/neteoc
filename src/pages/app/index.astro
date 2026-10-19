@@ -1,3 +1,19 @@
+---
+const supabase = Astro.locals.supabase;
+if (!supabase) return new Response('Workspace is unavailable', { status: 503 });
+
+const { data: organizations, error } = await supabase
+  .from('organizations')
+  .select('id, name')
+  .order('name')
+  .order('id');
+
+if (error) {
+  console.error('organization_list_unavailable', { code: error.code });
+  return new Response('Workspace is unavailable', { status: 503 });
+}
+---
+
 <!doctype html>
 <html lang="en">
   <head>
@@ -8,10 +24,23 @@
   <body>
     <main>
       <h1>Workspace</h1>
-      <p>
-        Authentication is active. Organization access will be added with the
-        tenancy schema.
-      </p>
+      {organizations.length === 0 ? (
+        <p>
+          You do not belong to an organization yet. Ask an administrator for an
+          invitation.
+        </p>
+      ) : (
+        <ul>
+          {organizations.map((organization) => (
+            <li>
+              {organization.name}{' '}
+              <small>
+                (ID: <code>{organization.id}</code>)
+              </small>
+            </li>
+          ))}
+        </ul>
+      )}
       <form method="post" action="/auth/logout">
         <button type="submit">Sign out</button>
       </form>

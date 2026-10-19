@@ -1,5 +1,14 @@
 # Repository status
 
+PR #2 merged on October 19, 2026. The first tenant read boundary is underway on
+`codex/mvp-tenant-kernel`: NetEOC Dev now has organizations and memberships with
+RLS, member-only organization reads, self-only membership reads, and no
+application writes. Direct SQL allow/deny tests passed and rolled back their
+fixtures; CI now runs them against PostgreSQL. The workspace lists only
+organizations returned by the user-scoped client, with IDs to distinguish
+duplicate names. Bootstrap, invitations, membership mutation, and full sign-in
+session testing remain next steps. See [Tenant kernel](tenant-kernel.md).
+
 As of 2026-10-19, the foundation and MVP plan were merged in
 [PR #1](https://github.com/neteoc/neteoc/pull/1). The user subsequently asked
 for a planning review and for MVP work to begin. The first local slice adds an
@@ -29,9 +38,8 @@ confirming that this request did not create an account. `bun run check` passed
 with Bun 1.4.3, including Astro diagnostics and the Worker build. Bun audit,
 Semgrep, and Trivy reported no high or critical findings in this slice.
 
-The project is healthy, with no application tables. PostGIS is not yet
-installed. The first tracked migration removed `PUBLIC`, `anon`, and
-`authenticated` execute privileges from the pre-existing
+PostGIS is not yet installed. The first tracked migration removed `PUBLIC`,
+`anon`, and `authenticated` execute privileges from the pre-existing
 `public.rls_auto_enable()` event-trigger helper; negative privilege checks pass
 and the security advisor no longer flags the function. The corresponding event
 trigger is not installed, so each future table migration must enable RLS

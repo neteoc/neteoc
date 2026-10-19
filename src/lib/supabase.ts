@@ -1,6 +1,7 @@
 import { env } from 'cloudflare:workers';
 import { createServerClient, parseCookieHeader } from '@supabase/ssr';
 import type { AstroCookies } from 'astro';
+import type { Database } from './database.types';
 
 export function getSupabaseConfig() {
   const url = env.SUPABASE_URL;
@@ -17,7 +18,7 @@ export function createSupabaseClient(
   const config = getSupabaseConfig();
   if (!config) return null;
 
-  return createServerClient(config.url, config.key, {
+  return createServerClient<Database>(config.url, config.key, {
     cookieOptions: {
       httpOnly: true,
       secure: true,

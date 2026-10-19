@@ -22,6 +22,8 @@ Read these documents in order:
 9. [Security](security.md): threat model, scanning, and reporting.
 10. [Repository status](status.md): completed work, verification, and next
     steps.
+11. [Tenant kernel](tenant-kernel.md): first organization and membership read
+    boundary and its authorization test.
 
 Keep substantive documentation here in Markdown. If PDFs become useful, put them
 in `docs/pdfs/` and link them from the relevant Markdown page. Do not copy

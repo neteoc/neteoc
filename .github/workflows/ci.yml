@@ -9,6 +9,24 @@ permissions:
   contents: read
 
 jobs:
+  tenant-rls:
+    name: Tenant RLS
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out migrations and tests
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Run tenant authorization tests
+        run: |
+          sudo systemctl start postgresql.service
+          sudo -u postgres psql -v ON_ERROR_STOP=1 -f tests/sql/ci-bootstrap.sql
+          for migration in supabase/migrations/*.sql; do
+            sudo -u postgres psql -v ON_ERROR_STOP=1 -f "$migration"
+          done
+          sudo -u postgres psql -v ON_ERROR_STOP=1 -f tests/sql/tenant_read_kernel.sql
+
   quality-security:
     name: Quality and security
     runs-on: ubuntu-latest

@@ -5,7 +5,8 @@ if (!supabase) return new Response('Workspace is unavailable', { status: 503 });
 const { data: organizations, error } = await supabase
   .from('organizations')
   .select('id, name')
-  .order('name');
+  .order('name')
+  .order('id');
 
 if (error) {
   console.error('organization_list_unavailable', { code: error.code });
@@ -31,7 +32,12 @@ if (error) {
       ) : (
         <ul>
           {organizations.map((organization) => (
-            <li>{organization.name}</li>
+            <li>
+              {organization.name}{' '}
+              <small>
+                (ID: <code>{organization.id}</code>)
+              </small>
+            </li>
           ))}
         </ul>
       )}

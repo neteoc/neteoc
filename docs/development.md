@@ -3,7 +3,13 @@
 ## Local setup
 
 Install [Bun 1.4.3](https://bun.sh/docs/installation) (see `.bun-version`),
-Python 3, and Git. On Linux x86_64, run:
+Python 3, and Git. Local Worker preview and Worker type generation also require
+Node.js 22 or later for the Wrangler CLI. This is a tooling exception: Bun
+remains the package manager, script runner, and test runner. The pinned Wrangler
+version accepts a type-generation command under Bun but its local preview server
+did not respond to requests in our verification, and Wrangler warns that Bun is
+unsupported. Application code still targets Cloudflare Workers. On Linux x86_64,
+run:
 
 ```sh
 bun install --frozen-lockfile

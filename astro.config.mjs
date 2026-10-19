@@ -3,5 +3,6 @@ import cloudflare from '@astrojs/cloudflare';
 
 export default defineConfig({
   output: 'server',
+  security: { checkOrigin: true },
   adapter: cloudflare(),
 });

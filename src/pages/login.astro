@@ -1,10 +1,12 @@
 ---
-import { createSupabaseClient } from '../lib/supabase';
-
-const supabase = createSupabaseClient(Astro.request, Astro.cookies);
+const supabase = Astro.locals.supabase;
 const error = Astro.url.searchParams.get('error');
-Astro.response.headers.set('Cache-Control', 'private, no-store');
-Astro.response.headers.set('X-Robots-Tag', 'noindex');
+const message =
+  error === 'rate'
+    ? 'Please wait before requesting another sign-in code.'
+    : error === 'unavailable'
+      ? 'Sign in is temporarily unavailable. Please try again later.'
+      : 'We could not start sign in. Please try again.';
 ---
 
 <!doctype html>
@@ -21,9 +23,7 @@ Astro.response.headers.set('X-Robots-Tag', 'noindex');
       {supabase ? (
         <>
           <p>Enter the email address associated with your invitation.</p>
-          {error && (
-            <p role="alert">We could not start sign in. Please try again.</p>
-          )}
+          {error && <p role="alert">{message}</p>}
           <form method="post" action="/auth/login">
             <label for="email">Email address</label>
             <input
@@ -33,7 +33,7 @@ Astro.response.headers.set('X-Robots-Tag', 'noindex');
               autocomplete="email"
               required
             />
-            <button type="submit">Email a sign-in link</button>
+            <button type="submit">Email a sign-in code</button>
           </form>
         </>
       ) : (

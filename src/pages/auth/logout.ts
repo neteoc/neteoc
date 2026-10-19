@@ -1,10 +1,26 @@
 import type { APIRoute } from 'astro';
-import { createSupabaseClient } from '../../lib/supabase';
+import { clearSupabaseCookies } from '../../lib/supabase';
 
-export const POST: APIRoute = async ({ request, cookies, redirect, url }) => {
-  if (request.headers.get('Origin') !== url.origin)
-    return new Response(null, { status: 403 });
-  const supabase = createSupabaseClient(request, cookies);
-  if (supabase) await supabase.auth.signOut();
+export const POST: APIRoute = async ({
+  request,
+  cookies,
+  locals,
+  redirect,
+}) => {
+  const supabase = locals.supabase;
+  if (supabase) {
+    try {
+      const { error } = await supabase.auth.signOut({ scope: 'local' });
+      if (error) {
+        console.error('auth_signout_failed', {
+          status: error.status,
+          code: error.code,
+        });
+      }
+    } catch {
+      console.error('auth_signout_unreachable');
+    }
+  }
+  clearSupabaseCookies(request, cookies);
   return redirect('/login', 303);
 };

@@ -23,7 +23,9 @@ bun run check
 Run `bun run dev` for local Astro development or `bun run build` followed by
 `bun run preview` to exercise the Worker runtime. Copy `.dev.vars.example` to
 `.dev.vars` and provide a local Supabase URL and publishable key when testing
-authentication. The application intentionally has no service-role key binding.
+authentication. Configure the sign-in email template as described in the
+[authentication setup](docs/auth-setup.md). The application intentionally has no
+service-role key binding.
 
 See the [development guide](docs/development.md) for security tool setup, commit
 rules, and future implementation conventions.

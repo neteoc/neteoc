@@ -1,8 +1,3 @@
----
-Astro.response.headers.set('Cache-Control', 'private, no-store');
-Astro.response.headers.set('X-Robots-Tag', 'noindex');
----
-
 <!doctype html>
 <html lang="en">
   <head>
@@ -14,7 +9,10 @@ Astro.response.headers.set('X-Robots-Tag', 'noindex');
   <body>
     <main>
       <h1>Check your email</h1>
-      <p>If this address has access, a sign-in link will arrive shortly.</p>
+      <p>If this address has access, a sign-in code will arrive shortly.</p>
+      <p>
+        <a href="/auth/confirm">Enter a sign-in code</a>
+      </p>
     </main>
   </body>
 </html>

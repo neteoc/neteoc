@@ -15,10 +15,13 @@ Read these documents in order:
 5. [Development plan](development-plan.md): milestones and release gates.
 6. [MVP implementation contract](mvp-implementation-contract.md): build order,
    boundary decisions, and verification matrix.
-7. [Development guidelines](development.md): setup, checks, and contribution
+7. [Authentication setup](auth-setup.md): bindings, email template, rate limits,
+   and integration tests for the runtime slice.
+8. [Development guidelines](development.md): setup, checks, and contribution
    rules.
-8. [Security](security.md): threat model, scanning, and reporting.
-9. [Repository status](status.md): completed work, verification, and next steps.
+9. [Security](security.md): threat model, scanning, and reporting.
+10. [Repository status](status.md): completed work, verification, and next
+    steps.
 
 Keep substantive documentation here in Markdown. If PDFs become useful, put them
 in `docs/pdfs/` and link them from the relevant Markdown page. Do not copy

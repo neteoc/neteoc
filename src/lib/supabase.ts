@@ -9,20 +9,53 @@ export function getSupabaseConfig() {
   return { url, key };
 }
 
-export function createSupabaseClient(request: Request, cookies: AstroCookies) {
+export function createSupabaseClient(
+  request: Request,
+  cookies: AstroCookies,
+  responseHeaders: Headers,
+) {
   const config = getSupabaseConfig();
   if (!config) return null;
 
   return createServerClient(config.url, config.key, {
+    cookieOptions: {
+      httpOnly: true,
+      secure: true,
+      sameSite: 'lax',
+      path: '/',
+      maxAge: 60 * 60 * 24 * 7,
+    },
     cookies: {
       getAll() {
         return parseCookieHeader(request.headers.get('Cookie') ?? '');
       },
-      setAll(cookiesToSet) {
+      setAll(cookiesToSet, headers) {
         for (const { name, value, options } of cookiesToSet) {
-          cookies.set(name, value, options);
+          cookies.set(name, value, {
+            ...options,
+            httpOnly: true,
+            secure: true,
+            sameSite: 'lax',
+            path: '/',
+            maxAge:
+              options.maxAge !== undefined && options.maxAge <= 0
+                ? options.maxAge
+                : 60 * 60 * 24 * 7,
+          });
+        }
+        for (const [name, value] of Object.entries(headers ?? {})) {
+          responseHeaders.set(name, value);
         }
       },
     },
   });
+}
+
+export function clearSupabaseCookies(request: Request, cookies: AstroCookies) {
+  const current = parseCookieHeader(request.headers.get('Cookie') ?? '');
+  for (const { name } of current) {
+    if (/^sb-[A-Za-z0-9_-]+-(auth-token|code-verifier)(?:\.\d+)?$/.test(name)) {
+      cookies.delete(name, { path: '/' });
+    }
+  }
 }

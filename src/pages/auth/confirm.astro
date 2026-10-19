@@ -1,0 +1,89 @@
+---
+import { env } from 'cloudflare:workers';
+import {
+  allowLogin,
+  normalizeLoginEmail,
+  readSmallForm,
+} from '../../lib/login';
+
+if (Astro.request.method === 'POST') {
+  const supabase = Astro.locals.supabase;
+  if (!supabase)
+    return new Response('Sign in is not configured', { status: 503 });
+
+  const form = await readSmallForm(Astro.request);
+  const email = form ? normalizeLoginEmail(form) : null;
+  const tokens = form?.getAll('token') ?? [];
+  if (!email || tokens.length !== 1 || !/^\d{6}$/.test(tokens[0])) {
+    return Astro.redirect('/login?error=invalid', 303);
+  }
+
+  try {
+    if (!(await allowLogin(Astro.request, email, env))) {
+      console.warn('auth_verify_rate_limited');
+      return Astro.redirect('/login?error=rate', 303);
+    }
+  } catch {
+    console.error('auth_verify_limiter_unavailable');
+    return Astro.redirect('/login?error=unavailable', 303);
+  }
+
+  try {
+    const { error } = await supabase.auth.verifyOtp({
+      email,
+      token: tokens[0],
+      type: 'email',
+    });
+    if (error) {
+      if (error.status === 429 || (error.status ?? 0) >= 500) {
+        console.error('auth_verify_provider_unavailable', {
+          status: error.status,
+          code: error.code,
+        });
+        return Astro.redirect('/login?error=unavailable', 303);
+      }
+      return Astro.redirect('/login?error=invalid', 303);
+    }
+  } catch {
+    console.error('auth_verify_provider_unreachable');
+    return Astro.redirect('/login?error=unavailable', 303);
+  }
+  return Astro.redirect('/app', 303);
+}
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <title>Confirm sign in | NetEOC</title>
+  </head>
+  <body>
+    <main>
+      <h1>Confirm sign in</h1>
+      <p>Enter the email address and code from your sign-in email.</p>
+      <form method="post" action="/auth/confirm">
+        <label for="email">Email address</label>
+        <input
+          id="email"
+          name="email"
+          type="email"
+          autocomplete="email"
+          required
+        />
+        <label for="token">Sign-in code</label>
+        <input
+          id="token"
+          name="token"
+          inputmode="numeric"
+          pattern="[0-9]{6}"
+          maxlength="6"
+          required
+        />
+        <button type="submit">Continue to NetEOC</button>
+      </form>
+    </main>
+  </body>
+</html>

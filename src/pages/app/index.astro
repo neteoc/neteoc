@@ -1,16 +1,3 @@
----
-import { createSupabaseClient } from '../../lib/supabase';
-
-const supabase = createSupabaseClient(Astro.request, Astro.cookies);
-if (!supabase) return Astro.redirect('/login');
-
-const { data, error } = await supabase.auth.getClaims();
-if (error || !data?.claims) return Astro.redirect('/login');
-
-Astro.response.headers.set('Cache-Control', 'private, no-store');
-Astro.response.headers.set('X-Robots-Tag', 'noindex');
----
-
 <!doctype html>
 <html lang="en">
   <head>

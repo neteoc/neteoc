@@ -59,10 +59,14 @@ sensitive payloads.
 
 Before adding a package or Action, check its current supported release and
 license, use an exact package version, update `bun.lock`, and scan dependencies.
-Actions must have full 40-character SHA references with version comments. Keep
-permissions at workflow/job minimum; untrusted PRs get no deployment
-credentials. Run `actionlint` and policy checks when editing workflows. Review
-dependency advisories and note the reason and expiry for any exception.
+`bunfig.toml` requires newly resolved package versions to be at least six days
+old (518,400 seconds). `bun.lock` was regenerated under this rule; frozen
+installs continue to use its exact versions. Do not add blanket age-gate
+exceptions for dependencies. Actions must have full 40-character SHA references
+with version comments. Keep permissions at workflow/job minimum; untrusted PRs
+get no deployment credentials. Run `actionlint` and policy checks when editing
+workflows. Review dependency advisories and note the reason and expiry for any
+exception.
 
 Formatting: Prettier for JS, JSON, YAML, and Markdown; markdownlint for prose;
 ESLint for JS; add `astro check`, TypeScript, and framework-aware lint when the

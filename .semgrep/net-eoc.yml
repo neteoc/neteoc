@@ -1,0 +1,25 @@
+rules:
+  - id: neteoc-no-eval
+    message: Avoid dynamic code execution on untrusted GIS data.
+    severity: ERROR
+    languages: [javascript, typescript]
+    patterns:
+      - pattern-either:
+          - pattern: eval(...)
+          - pattern: new Function(...)
+  - id: neteoc-no-innerhtml
+    message: Render external GIS properties as text, not unsanitized HTML.
+    severity: ERROR
+    languages: [javascript, typescript]
+    patterns:
+      - pattern-either:
+          - pattern: $X.innerHTML = $Y
+          - pattern: $X.outerHTML = $Y
+  - id: neteoc-no-service-key-client
+    message: A privileged Supabase key must never be accessed from browser code.
+    severity: ERROR
+    languages: [javascript, typescript]
+    patterns:
+      - pattern-either:
+          - pattern: import.meta.env.PUBLIC_SUPABASE_SERVICE_ROLE_KEY
+          - pattern: import.meta.env.PUBLIC_SUPABASE_SECRET_KEY

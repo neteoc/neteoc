@@ -1,0 +1,24 @@
+{
+  "platform": "linux-x86_64",
+  "verified": "2026-10-19",
+  "tools": [
+    {
+      "name": "actionlint",
+      "version": "v1.7.12",
+      "url": "https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_amd64.tar.gz",
+      "sha256": "8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8"
+    },
+    {
+      "name": "trivy",
+      "version": "v0.76.0",
+      "url": "https://github.com/aquasecurity/trivy/releases/download/v0.76.0/trivy_0.76.0_Linux-64bit.tar.gz",
+      "sha256": "e24b1c51293c1b15e4ba8d45bbc7891ba053f90278ec2698f3562c993e145fe7"
+    },
+    {
+      "name": "trufflehog",
+      "version": "v3.99.2",
+      "url": "https://github.com/trufflesecurity/trufflehog/releases/download/v3.99.2/trufflehog_3.99.2_linux_amd64.tar.gz",
+      "sha256": "3c7b0d1dc4278294269bfdd7594bca8bb28c78da0a4a06ad202ded37b48deca4"
+    }
+  ]
+}

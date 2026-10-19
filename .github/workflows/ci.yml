@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  quality-security:
+    name: Quality and security
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Check out full history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Install Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: .bun-version
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+      - name: Check formatting, lint, policy, and tests
+        run: bun run check
+      - name: Verify commit messages
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          printf '%s\n' "$PR_TITLE" | bun run commitlint
+          git rev-list "$BASE_SHA..$HEAD_SHA" | while read -r commit; do
+            git log -1 --format=%B "$commit" | bun run commitlint
+          done
+      - name: Install Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.13'
+      - name: Install security tools
+        run: |
+          python3 scripts/install-tools.py
+          python3 -m pip install --requirement requirements-security.txt
+      - name: Lint GitHub workflows
+        run: .tools/bin/actionlint -color
+      - name: Scan source patterns
+        run: bun run security:semgrep
+      - name: Scan for vulnerable dependencies and misconfigurations
+        run: bun run security:trivy
+      - name: Audit Bun packages
+        run: bun run security:audit
+      - name: Scan working tree for credentials
+        run: bun run secrets:tree
+      - name: Scan repository history for credentials
+        run: bun run secrets:history

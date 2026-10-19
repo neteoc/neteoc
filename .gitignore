@@ -147,3 +147,16 @@ vite.config.ts.timestamp-*
 
 # Turbo Repo
 .turbo
+
+# NetEOC local tooling, services, and secrets
+.tools/
+.wrangler/
+.dev.vars
+.dev.vars.*
+!.dev.vars.example
+supabase/.temp/
+supabase/.branches/
+playwright-report/
+test-results/
+*.pem
+*.key

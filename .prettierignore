@@ -1,0 +1,8 @@
+node_modules/
+.tools/
+bun.lock
+coverage/
+dist/
+.astro/
+.wrangler/
+.husky/_/

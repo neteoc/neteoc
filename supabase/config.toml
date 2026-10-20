@@ -65,8 +65,13 @@ enabled = true
 schema_paths = []
 
 [db.seed]
-# If enabled, seeds the database after migrations during a db reset.
-enabled = true
+# Disabled: no seed file is tracked. The CLI default points at
+# `supabase/seed.sql`, which does not exist here, so `supabase start` and
+# `supabase db reset` warn "no files matched pattern: supabase/seed.sql".
+# Fixtures are created and rolled back inside the SQL tests under `tests/sql/`
+# instead, and real incident data must never enter a seed file. Re-enable this
+# with an explicit path if synthetic seed data is ever tracked.
+enabled = false
 # Specifies an ordered list of seed files to load during db reset.
 # Supports glob patterns relative to supabase directory: "./seeds/*.sql"
 sql_paths = ["./seed.sql"]
@@ -389,7 +394,16 @@ deno_version = 2
 # secret_key = "env(SECRET_VALUE)"
 
 [analytics]
-enabled = true
+# Disabled: this starts Logflare and a Vector log collector, and Vector mounts
+# the Docker socket. Docker Desktop's Enhanced Container Isolation denies that
+# mount unless the image is allowlisted, so `supabase start` failed with
+# "Docker socket mount denied for container with image
+# .../supabase/vector:0.58.0-alpine". Enhanced Container Isolation is a managed
+# security control, so the log collector is dropped rather than the isolation
+# weakened. Neither service is needed to verify authentication (#7) or the
+# authorization tests (#9), which use the database, GoTrue, PostgREST and the
+# mail catcher.
+enabled = false
 port = 54327
 # Configure one of the supported backends: `postgres`, `bigquery`.
 backend = "postgres"

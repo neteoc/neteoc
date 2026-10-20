@@ -30,6 +30,8 @@ Read these documents in order:
     for appointing the first platform admin and organization admin.
 14. [Layer feature reads](layer-feature-queries.md): the bounded viewport and
     list endpoint, its stable cursor, limits, and index evidence.
+15. [Staging deployment](deployment.md): merge release path, environment setup,
+    hosted checks, and recovery.
 
 Keep substantive documentation here in Markdown. If PDFs become useful, put them
 in `docs/pdfs/` and link them from the relevant Markdown page. Do not copy

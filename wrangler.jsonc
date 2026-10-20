@@ -43,4 +43,40 @@
     "enabled": true,
     "head_sampling_rate": 1,
   },
+  "env": {
+    "staging": {
+      "name": "neteoc-staging",
+      "workers_dev": true,
+      "secrets": {
+        "required": ["SUPABASE_URL", "SUPABASE_PUBLISHABLE_KEY"],
+      },
+      "ratelimits": [
+        {
+          "name": "LOGIN_IP_LIMIT",
+          "namespace_id": "770011",
+          "simple": { "limit": 30, "period": 60 },
+        },
+        {
+          "name": "LOGIN_EMAIL_LIMIT",
+          "namespace_id": "770012",
+          "simple": { "limit": 5, "period": 60 },
+        },
+        {
+          "name": "LOGIN_GLOBAL_LIMIT",
+          "namespace_id": "770013",
+          "simple": { "limit": 60, "period": 60 },
+        },
+        {
+          "name": "VERIFY_IP_LIMIT",
+          "namespace_id": "770014",
+          "simple": { "limit": 30, "period": 60 },
+        },
+        {
+          "name": "VERIFY_GLOBAL_LIMIT",
+          "namespace_id": "770015",
+          "simple": { "limit": 60, "period": 60 },
+        },
+      ],
+    },
+  },
 }

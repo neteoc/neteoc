@@ -12,6 +12,12 @@ invitation-only membership, per-layer visibility, GIS tokens, and Bun instead of
 Node/npm. Do not re-ask settled questions; ask one new question at a time if a
 material ambiguity remains.
 
+Start each issue in its own Git worktree rather than in the main checkout, and
+branch from `origin/main`. Several agents share this repository, and the one
+that reviews and merges works from the main checkout, so a shared working tree
+puts an in-progress branch and a checkout or pull in conflict. See
+`docs/development.md` for the commands.
+
 Use Bun 1.4.3 and `bun.lock` for dependency management and scripts. Use
 Conventional Commits, full SHA action pins, and the checks in
 `docs/development.md`. Keep substantive documents in `docs/` as Markdown. Future

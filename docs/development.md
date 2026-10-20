@@ -62,6 +62,29 @@ service-role key, are well-known public demo values. They are for this stack
 only. Never copy them into `.dev.vars`, never commit them, and run
 `supabase stop` when you are not using the stack.
 
+## One worktree per issue
+
+Start each issue in its own Git worktree instead of switching branches in the
+main checkout:
+
+```sh
+git fetch origin
+git worktree add ../neteoc-wt/<short-slug> -b <type>/<branch> origin/main
+cd ../neteoc-wt/<short-slug>
+bun install --frozen-lockfile
+```
+
+The install is required so the Husky hooks run there; without it a commit skips
+the secret scan, formatting, and policy checks. Remove the worktree with
+`git worktree remove ../neteoc-wt/<short-slug>` once its pull request merges.
+
+This is not a style preference. Several agents share this repository, and the
+one that reviews and merges works from the main checkout. With a single working
+tree, a `git switch` or `git pull` for a review collides with whatever branch is
+mid-change, and a review that checks out a pull request moves the tree out from
+under in-progress work. Review a branch with `gh pr diff`, or in a worktree of
+its own, rather than checking it out in the main checkout.
+
 ## Commit and pull request discipline
 
 Follow

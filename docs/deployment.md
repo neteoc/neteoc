@@ -1,9 +1,9 @@
 # Staging deployment
 
 NetEOC Dev (`mssluxsybusndqxdgica`) is the staging Supabase project. The
-`neteoc-staging` Cloudflare Worker serves the staging application at
-`https://neteoc-staging.kerryhatcher.workers.dev`. Local development uses the
-local Supabase stack. A later production release needs separate projects.
+`neteoc` Cloudflare Worker serves the staging application at
+`https://neteoc.kerryhatcher.workers.dev`. Local development uses the local
+Supabase stack. A later production release needs separate projects.
 
 ## Merge release path
 
@@ -12,7 +12,7 @@ on each pull request. After a merge to `main`, two provider-managed GitHub
 integrations deploy from the same commit:
 
 - Supabase's GitHub integration applies unapplied migrations to NetEOC Dev.
-- Cloudflare Workers Builds builds and deploys `neteoc-staging`, then runs
+- Cloudflare Workers Builds builds and deploys `neteoc`, then runs
   `scripts/check-deployment.mjs` against its hosted URL.
 
 Neither integration needs a deploy token or database password stored in GitHub
@@ -46,22 +46,22 @@ remote configuration is explicitly enabled.
 
 ## Cloudflare Workers Builds
 
-In the **Kerry Personal** account, create or select a Worker named
-`neteoc-staging`, then connect `neteoc/neteoc` under **Settings → Build**. Set
-the production branch to `main`, root directory to the repository root, and
-these build settings:
+In the **Kerry Personal** account, select the existing Worker named `neteoc`,
+connected to `neteoc/neteoc` under **Settings → Build**. Set the production
+branch to `main`, root directory to the repository root, and these build
+settings:
 
-| Setting        | Value                                                                                                                                                  |
-| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Build command  | `bun install --frozen-lockfile && bun run build`                                                                                                       |
-| Deploy command | `node node_modules/wrangler/bin/wrangler.js deploy --env staging && node scripts/check-deployment.mjs https://neteoc-staging.kerryhatcher.workers.dev` |
+| Setting        | Value                                                                                                                            |
+| -------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| Build command  | `bun run build`                                                                                                                  |
+| Deploy command | `node node_modules/wrangler/bin/wrangler.js deploy && node scripts/check-deployment.mjs https://neteoc.kerryhatcher.workers.dev` |
 
-Set build variables `BUN_VERSION=1.4.3`, `NODE_VERSION=22`,
-`SKIP_DEPENDENCY_INSTALL=1`, and `CLOUDFLARE_ENV=staging`. Cloudflare's build
-image defaults to an older Bun version. The explicit install enforces
-`bun.lock`. Astro reads `CLOUDFLARE_ENV` during its build; `--env staging` at
-deploy time alone would leave the top-level bindings in the generated Worker.
-Keep the Cloudflare-managed API token selected.
+Keep Bun 1.4.3 selected; Workers Builds detects it from `.bun-version` and
+installs dependencies with `bun install --frozen-lockfile` before running the
+build command. Keep the Cloudflare-managed API token selected. The Worker name
+matches the top-level `name` in `wrangler.jsonc`; this account's `neteoc` Worker
+is the staging target. Use a separate Worker and Supabase project for a later
+production release.
 
 Set the staging Worker's runtime bindings `SUPABASE_URL` to
 `https://mssluxsybusndqxdgica.supabase.co` and `SUPABASE_PUBLISHABLE_KEY` to

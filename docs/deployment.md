@@ -1,65 +1,82 @@
 # Staging deployment
 
-NetEOC Dev (`mssluxsybusndqxdgica`) is the staging Supabase project. A
-`neteoc-staging` Cloudflare Worker serves the staging application. Local
-development uses the local Supabase stack. Production will have separate
-projects and an approval-gated release workflow; this staging job does not
-deploy production.
+NetEOC Dev (`mssluxsybusndqxdgica`) is the staging Supabase project. The
+`neteoc-staging` Cloudflare Worker serves the staging application at
+`https://neteoc-staging.kerryhatcher.workers.dev`. Local development uses the
+local Supabase stack. A later production release needs separate projects.
 
 ## Merge release path
 
-The `deploy-staging` job in `.github/workflows/ci.yml` runs only for a push to
-`main`, after the SQL authorization and quality/security jobs pass. GitHub's
-`neteoc-staging` concurrency group prevents overlapping release jobs. The job
-links to NetEOC Dev, previews pending migrations, applies them, builds the Astro
-Worker with Bun 1.4.3, deploys with the locked Wrangler version, and checks the
-hosted access boundary. A failed migration or build stops the Worker deployment.
-The job never runs with deployment credentials for a pull request. The build and
-deploy both set `CLOUDFLARE_ENV=staging`; Astro selects Wrangler's environment
-during its build, so `--env` at deploy time alone would use the top-level
-bindings.
+GitHub Actions runs the required `Tenant RLS` and `Quality and security` checks
+on each pull request. After a merge to `main`, two provider-managed GitHub
+integrations deploy from the same commit:
 
-New schema changes must be forward-compatible with the previously deployed
-Worker. A Worker version can be rolled back, but an applied database migration
-cannot be undone by rolling back Worker code. Do not edit a migration already
-applied to a shared project; add another migration.
+- Supabase's GitHub integration applies unapplied migrations to NetEOC Dev.
+- Cloudflare Workers Builds builds and deploys `neteoc-staging`, then runs
+  `scripts/check-deployment.mjs` against its hosted URL.
 
-## One-time GitHub configuration
+Neither integration needs a deploy token or database password stored in GitHub
+Actions. Cloudflare manages its own build token. The Supabase project connection
+authorizes Supabase to read the repository and deploy its `supabase/` directory.
 
-Create a GitHub Actions environment named `staging`, restricted to `main`. Set
-these environment variables:
+The providers run independently. A Worker may deploy before its matching
+migration finishes, or a migration may apply while the old Worker still runs.
+Every schema change must therefore be compatible with both Worker versions. Use
+expand-and-contract migrations and defer removals until all deployed code has
+stopped using the old schema. A Worker version can be rolled back, but an
+applied database migration cannot be undone by rolling back Worker code. Do not
+edit a migration already applied to a shared project; add another migration.
 
-| Variable                | Value                                                    |
-| ----------------------- | -------------------------------------------------------- |
-| `CLOUDFLARE_ACCOUNT_ID` | Account that owns the staging Worker.                    |
-| `STAGING_BASE_URL`      | HTTPS origin of `neteoc-staging`, with no path or query. |
+## Supabase GitHub integration
 
-Set these **environment secrets**:
+In the NetEOC Dev project, connect `neteoc/neteoc` under **Project Settings →
+Integrations → GitHub** with repository root as the working directory. Enable
+**Deploy to production** for the repository's `main` branch. Supabase calls the
+project's primary branch “production”; this particular project is NetEOC's
+staging environment. Automatic branching and preview projects are optional and
+are not needed for merge deploys. Add the Supabase migration check to GitHub
+branch protection when it appears on a pull request.
 
-| Secret                     | Purpose                                                                |
-| -------------------------- | ---------------------------------------------------------------------- |
-| `CLOUDFLARE_API_TOKEN`     | Account-scoped token with the permissions needed to deploy Workers.    |
-| `SUPABASE_ACCESS_TOKEN`    | Scoped token permitted to link and deploy to NetEOC Dev.               |
-| `SUPABASE_DB_PASSWORD`     | Database password for NetEOC Dev; only the migration step receives it. |
-| `SUPABASE_PUBLISHABLE_KEY` | Active `sb_publishable_` key for NetEOC Dev.                           |
+Before enabling deployment, compare the project's migration ledger with the
+committed migration files. The integration applies pending migrations but cannot
+repair missing history entries. Do not push local `supabase/config.toml`
+settings to the hosted project unchanged: it contains localhost URLs and local
+mail settings. Supabase ignores Auth configuration on the primary branch unless
+remote configuration is explicitly enabled.
 
-The Worker receives only the Supabase URL and publishable key. The deployment
-step puts them in a temporary file with mode `0600`, passes that file to
-Wrangler's `--secrets-file`, and removes it when the step exits. The database
-password and access token are never Worker bindings. Do not place any of these
-values in the repository or in pull-request workflows.
+## Cloudflare Workers Builds
 
-## One-time hosted configuration
+In the **Kerry Personal** account, create or select a Worker named
+`neteoc-staging`, then connect `neteoc/neteoc` under **Settings → Build**. Set
+the production branch to `main`, root directory to the repository root, and
+these build settings:
 
-Confirm the remote migration ledger matches every migration already applied to
-NetEOC Dev before enabling the job. The next merge will apply any remaining
-committed migrations; the workflow must not repair or reset migration history.
+| Setting        | Value                                                                                                                                                  |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Build command  | `bun install --frozen-lockfile && bun run build`                                                                                                       |
+| Deploy command | `node node_modules/wrangler/bin/wrangler.js deploy --env staging && node scripts/check-deployment.mjs https://neteoc-staging.kerryhatcher.workers.dev` |
+
+Set build variables `BUN_VERSION=1.4.3`, `NODE_VERSION=22`,
+`SKIP_DEPENDENCY_INSTALL=1`, and `CLOUDFLARE_ENV=staging`. Cloudflare's build
+image defaults to an older Bun version. The explicit install enforces
+`bun.lock`. Astro reads `CLOUDFLARE_ENV` during its build; `--env staging` at
+deploy time alone would leave the top-level bindings in the generated Worker.
+Keep the Cloudflare-managed API token selected.
+
+Set the staging Worker's runtime bindings `SUPABASE_URL` to
+`https://mssluxsybusndqxdgica.supabase.co` and `SUPABASE_PUBLISHABLE_KEY` to
+NetEOC Dev's active `sb_publishable_` key. These identify the public Supabase
+API; they grant only the access allowed by RLS. Store them in Cloudflare's
+Worker variables and secrets UI, not in GitHub Actions. The Worker must never
+receive a Supabase service-role key or database password.
+
+## Hosted authentication
+
 Set NetEOC Dev's Auth Site URL and exact redirect allow-list entry for the
-hosted staging origin and `/auth/confirm`, while retaining the local callback if
-local sign-in remains in use. Follow [authentication setup](auth-setup.md) for
-the OTP template and SMTP settings. Do not push the local `supabase/config.toml`
-to NetEOC Dev unchanged: it contains localhost URLs and local mail settings. Use
-synthetic staging data only.
+staging origin and `/auth/confirm`, while retaining the local callback if local
+sign-in remains in use. Follow [authentication setup](auth-setup.md) for the OTP
+template and SMTP settings. Keep signups invitation-only and use synthetic
+staging data.
 
 ## Verification and recovery
 
@@ -69,9 +86,11 @@ confirmation page, and `403` for cross-origin authentication POSTs. It does not
 send email or consume an OTP; the full sign-in sequence needs a separate staging
 acceptance test.
 
-If migration application fails, inspect the failed migration and make a new
-forward migration as needed. Do not automatically repair history or reset the
-shared project. If the Worker deployment or smoke check fails after a successful
-migration, use Cloudflare's Worker version rollback where safe, then fix the
-release and rerun CI. Keep database and uploaded-object backups and a restore
+Inspect the Supabase integration's deployment result and Cloudflare's build
+result for each merge. A Cloudflare build can pass before the matching Supabase
+deployment finishes; check both results before treating a merge as deployed. If
+migration application fails, make a new forward migration as needed. Do not
+automatically repair history or reset the shared project. If the Worker deploy
+or smoke check fails, use Cloudflare's Worker version rollback where safe, then
+fix the release. Keep database and uploaded-object backups and a restore
 rehearsal before any production pilot.

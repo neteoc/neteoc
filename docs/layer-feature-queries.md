@@ -52,9 +52,27 @@ total count, no layer name, and no extent. Responses are `private, no-store`.
 
 ## Limits and refusals
 
-Each request is checked in the route before any query runs, and each refusal
-returns `400` with a stable `error.code`. The database enforces the same bounds,
-so a direct RPC caller cannot exceed them either.
+The route checks each request before any query runs, and each refusal returns
+`400` with a stable `error.code`. The route is a convenience. The function is
+granted to `authenticated`, so it is a public API in its own right, and every
+bound below is enforced in `list_layer_features` itself. A direct RPC caller
+cannot exceed any of them.
+
+### Arguments and where each bound is enforced
+
+| Argument                                           | Bound                                                                       | Enforced in                                                                                                   |
+| -------------------------------------------------- | --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `p_layer_id`                                       | not null                                                                    | function                                                                                                      |
+| `p_min_lon`, `p_min_lat`, `p_max_lon`, `p_max_lat` | all four or none; WGS84 range; min <= max; span at most 90 degrees per axis | function. The span was TypeScript-only until this change.                                                     |
+| `p_limit`                                          | 1 to 200                                                                    | function                                                                                                      |
+| `p_byte_budget`                                    | 1 to 258048                                                                 | function. The upper bound was missing until this change, and a direct call with 2147483647 returned 200 rows. |
+| `p_after_created_at`, `p_after_id`                 | both or neither; the timestamp range is PostgreSQL's                        | function for the pair, the cast for the range                                                                 |
+| sort                                               | no argument; the order is fixed as `(created_at, id)`                       | function. There is nothing to bound.                                                                          |
+
+The ceilings are literals in the migration. `tests/feature-query.test.ts` reads
+them from the migration and fails if a route constant differs from the database.
+The SQL suite calls the function directly as `authenticated` and asserts each
+refusal by SQLSTATE and message, with a boundary pair for each ceiling.
 
 | Condition                                                      | Code                                       |
 | -------------------------------------------------------------- | ------------------------------------------ |
@@ -195,6 +213,9 @@ needs a new measurement.
 - `anon` has no execute privilege. An anonymous request gets `401` from the
   route, and the function refuses an anonymous RPC with a grant error.
 - No write path is added. Revision checks belong to #14.
+- The bounding box is optional. Omitted, the function applies no spatial filter,
+  and the list form reads the layer in pages. The route sends no box in that
+  case.
 
 ## Numeric fidelity of attributes
 

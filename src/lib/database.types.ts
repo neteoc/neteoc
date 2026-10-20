@@ -7,11 +7,6 @@ export type Json =
   | Json[];
 
 export type Database = {
-  // Allows to automatically instantiate createClient with right options
-  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
-  __InternalSupabase: {
-    PostgrestVersion: '14.18';
-  };
   public: {
     Tables: {
       features: {
@@ -304,11 +299,11 @@ export type Database = {
           p_after_id?: string;
           p_byte_budget?: number;
           p_layer_id: string;
-          p_limit: number;
-          p_max_lat: number;
-          p_max_lon: number;
-          p_min_lat: number;
-          p_min_lon: number;
+          p_limit?: number;
+          p_max_lat?: number;
+          p_max_lon?: number;
+          p_min_lat?: number;
+          p_min_lon?: number;
         };
         Returns: Json;
       };

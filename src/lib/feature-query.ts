@@ -35,13 +35,6 @@ export interface Bbox {
   maxLat: number;
 }
 
-export const WORLD_BBOX: Bbox = {
-  minLon: -180,
-  minLat: -90,
-  maxLon: 180,
-  maxLat: 90,
-};
-
 export interface Cursor {
   createdAt: string;
   id: string;
@@ -49,7 +42,8 @@ export interface Cursor {
 
 export interface FeatureQuery {
   layerId: string;
-  bbox: Bbox;
+  // Null is the list form: the whole layer, with no spatial filter in the database.
+  bbox: Bbox | null;
   limit: number;
   cursor: Cursor | null;
 }
@@ -91,9 +85,7 @@ export function parseFeatureQuery(
 
   const bboxRaw = params.get('bbox');
   const bbox =
-    bboxRaw === null
-      ? { ok: true as const, bbox: WORLD_BBOX }
-      : parseBbox(bboxRaw);
+    bboxRaw === null ? { ok: true as const, bbox: null } : parseBbox(bboxRaw);
   if (!bbox.ok) return bbox;
 
   const limit = parseLimit(params.get('limit'));

@@ -35,13 +35,31 @@ function errorResponse(
   return jsonResponse(status, { error: { code, message, ...details } });
 }
 
+// A cursor position is an object with string created_at and id. An array or an empty
+// object is a contract mismatch, and it must fail closed here rather than produce a
+// next_cursor the next request would reject.
+function isCursorPosition(
+  value: unknown,
+): value is { created_at: string; id: string } {
+  if (typeof value !== 'object' || value === null || Array.isArray(value))
+    return false;
+  const position = value as Record<string, unknown>;
+  return (
+    typeof position.created_at === 'string' && typeof position.id === 'string'
+  );
+}
+
 function isLayerPage(value: unknown): value is LayerPage {
   if (typeof value !== 'object' || value === null) return false;
   const page = value as Record<string, unknown>;
   return (
     Array.isArray(page.features) &&
     typeof page.has_more === 'boolean' &&
-    (page.next === null || typeof page.next === 'object') &&
+    // A next position is required while more rows exist, except when the first feature
+    // is oversized: then the page cannot advance, and next is null by design.
+    (page.next === null
+      ? !page.has_more || typeof page.oversized_feature_id === 'string'
+      : isCursorPosition(page.next)) &&
     (page.oversized_feature_id === null ||
       typeof page.oversized_feature_id === 'string')
   );
@@ -82,10 +100,11 @@ export const GET: APIRoute = async ({ params, request, locals }) => {
 
   const { data, error } = await supabase.rpc('list_layer_features', {
     p_layer_id: query.layerId,
-    p_min_lon: query.bbox.minLon,
-    p_min_lat: query.bbox.minLat,
-    p_max_lon: query.bbox.maxLon,
-    p_max_lat: query.bbox.maxLat,
+    // Omitted for the list form. The function's default null means no spatial filter.
+    p_min_lon: query.bbox?.minLon,
+    p_min_lat: query.bbox?.minLat,
+    p_max_lon: query.bbox?.maxLon,
+    p_max_lat: query.bbox?.maxLat,
     p_limit: query.limit,
     // Omitted on the first page. The function's default null makes that the start of the order.
     p_after_created_at: query.cursor?.createdAt,

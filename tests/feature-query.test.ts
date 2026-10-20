@@ -1,11 +1,11 @@
 import { describe, expect, test } from 'bun:test';
+import { readFileSync } from 'node:fs';
 import {
   DEFAULT_PAGE_SIZE,
   FEATURE_BYTE_BUDGET,
   MAX_BBOX_SPAN_DEGREES,
   MAX_PAGE_SIZE,
   MAX_RESPONSE_BYTES,
-  WORLD_BBOX,
   decodeCursor,
   encodeCursor,
   parseFeatureQuery,
@@ -37,7 +37,7 @@ describe('feature query defaults', () => {
       ok: true,
       query: {
         layerId: LAYER,
-        bbox: WORLD_BBOX,
+        bbox: null,
         limit: DEFAULT_PAGE_SIZE,
         cursor: null,
       },
@@ -276,6 +276,22 @@ describe('GET /api/v1/layers/{layerId}/features', () => {
     expect(calls).toHaveLength(0);
   });
 
+  test('the list form sends no box, so the database applies no spatial filter', async () => {
+    const { calls, context } = routeContext({ query: 'limit=25' });
+    await read(context);
+    expect(calls[0].args).toEqual({
+      p_layer_id: LAYER,
+      p_min_lon: undefined,
+      p_min_lat: undefined,
+      p_max_lon: undefined,
+      p_max_lat: undefined,
+      p_limit: 25,
+      p_after_created_at: undefined,
+      p_after_id: undefined,
+      p_byte_budget: FEATURE_BYTE_BUDGET,
+    });
+  });
+
   test('passes the validated query to the RPC with the response budget', async () => {
     const { calls, context } = routeContext({
       query: 'bbox=-104.9,39.7,-104.8,39.8&limit=25',
@@ -485,5 +501,75 @@ describe('database error mapping', () => {
     expect(status).toBe(500);
     expect(body.error.code).toBe('query_failed');
     expect(JSON.stringify(body)).not.toContain(code);
+  });
+});
+
+// The route's ceilings and the function's ceilings are separate literals in two
+// languages. The migration is the source the database enforces, so these tests read
+// it and fail the build if a ceiling moves on one side only.
+describe('ceilings agree with the database function', () => {
+  const migration = readFileSync(
+    new URL(
+      '../supabase/migrations/20261020183000_layer_feature_queries.sql',
+      import.meta.url,
+    ),
+    'utf8',
+  );
+  const ceiling = (pattern: RegExp): number => {
+    const match = pattern.exec(migration);
+    if (!match)
+      throw new Error(`ceiling not found in the migration: ${pattern}`);
+    return Number(match[1]);
+  };
+
+  test('page size ceiling', () => {
+    expect(ceiling(/p_limit > (\d+)/)).toBe(MAX_PAGE_SIZE);
+  });
+
+  test('bbox span ceiling', () => {
+    expect(ceiling(/p_max_lon - p_min_lon > (\d+)/)).toBe(
+      MAX_BBOX_SPAN_DEGREES,
+    );
+    expect(ceiling(/p_max_lat - p_min_lat > (\d+)/)).toBe(
+      MAX_BBOX_SPAN_DEGREES,
+    );
+  });
+
+  test('byte budget ceiling', () => {
+    expect(ceiling(/p_byte_budget > (\d+)/)).toBe(FEATURE_BYTE_BUDGET);
+  });
+});
+
+describe('a malformed next position fails closed', () => {
+  const page = (next: unknown, hasMore: boolean) =>
+    routeContext({
+      rpc: () => ({
+        data: {
+          features: [],
+          has_more: hasMore,
+          next,
+          oversized_feature_id: null,
+        },
+        error: null,
+      }),
+    });
+
+  test.each([
+    ['an empty object', {}],
+    ['an array', [SQL_CURSOR]],
+    ['a non-string id', { created_at: SQL_CURSOR.created_at, id: 7 }],
+    ['a missing created_at', { id: SQL_CURSOR.id }],
+  ])(
+    '%s with has_more true is a 500, not a page with an unusable cursor',
+    async (_, next) => {
+      const { status, body } = await read(page(next, true).context);
+      expect(status).toBe(500);
+      expect(body.next_cursor).toBeUndefined();
+    },
+  );
+
+  test('a malformed next with has_more false is refused too', async () => {
+    const { status } = await read(page([SQL_CURSOR], false).context);
+    expect(status).toBe(500);
   });
 });

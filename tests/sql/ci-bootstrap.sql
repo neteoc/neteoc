@@ -7,6 +7,7 @@ create schema auth;
 create table auth.users (
   id uuid primary key,
   email text,
+  email_confirmed_at timestamptz,
   created_at timestamptz not null default now()
 );
 

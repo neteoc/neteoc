@@ -54,6 +54,8 @@ jobs:
           psql -X -v ON_ERROR_STOP=1 -v VERBOSITY=verbose -f tests/sql/tenant_read_kernel.sql
           psql -X -v ON_ERROR_STOP=1 -v VERBOSITY=verbose -f tests/sql/operator_bootstrap.sql
           psql -X -v ON_ERROR_STOP=1 -v VERBOSITY=verbose -f tests/sql/maps_layer_associations.sql
+          psql -X -v ON_ERROR_STOP=1 -v VERBOSITY=verbose -f tests/sql/organization_invitations.sql
+          bash tests/sql/organization_invitations_race.sh
 
   quality-security:
     name: Quality and security

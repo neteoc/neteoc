@@ -24,6 +24,8 @@ Read these documents in order:
     steps.
 11. [Tenant kernel](tenant-kernel.md): first organization and membership read
     boundary and its authorization test.
+12. [Operator bootstrap](operator-bootstrap.md): the privileged, audited path
+    for appointing the first platform admin and organization admin.
 
 Keep substantive documentation here in Markdown. If PDFs become useful, put them
 in `docs/pdfs/` and link them from the relevant Markdown page. Do not copy

@@ -26,6 +26,7 @@ jobs:
             sudo -u postgres psql -v ON_ERROR_STOP=1 -f "$migration"
           done
           sudo -u postgres psql -v ON_ERROR_STOP=1 -f tests/sql/tenant_read_kernel.sql
+          sudo -u postgres psql -v ON_ERROR_STOP=1 -f tests/sql/operator_bootstrap.sql
 
   quality-security:
     name: Quality and security

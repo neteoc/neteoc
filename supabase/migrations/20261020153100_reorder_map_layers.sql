@@ -1,7 +1,7 @@
 -- Replaces a map's full layer order in one transaction. Each position moves
 -- above the current maximum first, so the unique (map_id, position) index never
 -- sees two rows sharing a position mid-update. Runs as the caller, so RLS still
--- applies; the explicit check gives a clear error to readers who cannot edit.
+-- applies.
 create function public.reorder_map_layers(
   p_map_id uuid,
   p_layer_ids uuid[]
@@ -18,14 +18,12 @@ begin
   if p_map_id is null or p_layer_ids is null then
     raise exception 'map and layer order are required';
   end if;
-  if not exists (
-    select 1
-    from public.maps as mp
-    join public.memberships as m on m.organization_id = mp.organization_id
-    where mp.id = p_map_id
-      and m.user_id = (select auth.uid())
-      and m.role in ('admin', 'editor')
-  ) then
+  -- Lock the map before reading its layers, so an attach that commits
+  -- concurrently cannot slip in between the checks and the update. Under RLS
+  -- this row is visible for update only to admins and editors, so a reader who
+  -- cannot edit gets no row and is refused here.
+  perform 1 from public.maps as mp where mp.id = p_map_id for update;
+  if not found then
     raise insufficient_privilege using message = 'map editing requires an admin or editor role';
   end if;
   if (select count(*) from public.map_layers where map_id = p_map_id) <> v_expected

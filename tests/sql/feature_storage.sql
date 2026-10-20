@@ -544,4 +544,96 @@ begin
 end;
 $$;
 
+-- Row policies are a second barrier behind the grants. The grants are absent by
+-- design: every write goes through the three RPCs, which carry their own checks
+-- (see feature_edits.sql). These policies must still refuse on their own, so this
+-- block restores the write grants for the rest of this transaction only. That is
+-- not a loosening. The grants are undone by the rollback at the end of this file,
+-- no migration grants them, and the catalog assertions above run before this point.
+reset role;
+grant insert (layer_id, organization_id, geom, title, description, status, properties)
+  on public.features to authenticated;
+grant update (geom, title, description, status, properties) on public.features to authenticated;
+grant delete on public.features to authenticated;
+
+do $$
+begin
+  if (select count(*) from pg_policies
+      where schemaname = 'public' and tablename = 'features'
+        and policyname in ('features_insert_editor', 'features_update_editor', 'features_delete_editor')) <> 3 then
+    raise exception 'an editor write policy on features is missing';
+  end if;
+end;
+$$;
+
+-- Viewer in organization A: the policies refuse every write, and the refusals say
+-- which rule refused them. An update or delete the policy filters out matches zero
+-- rows and raises nothing, so the row count is the assertion there.
+select set_config('request.jwt.claim.sub', 'c4b1a0d2-7e3f-4a10-9b21-5d6e7f809a03', true);
+set local role authenticated;
+do $$
+declare
+  affected integer;
+begin
+  begin
+    insert into public.features (layer_id, organization_id, geom, title)
+      values ('e6d3c2f4-9051-4c32-9d43-7f8091abc001', 'd5c2b1e3-8f40-4b21-8c32-6e7f8091ab01',
+              'SRID=4326;POINT(-104.99 39.74)'::public.wgs84_geometry, 'Viewer feature');
+    raise exception 'viewer inserted through the policy';
+  exception when insufficient_privilege then
+    if sqlerrm <> 'new row violates row-level security policy for table "features"' then raise; end if;
+  end;
+
+  update public.features set title = 'viewer rename' where id = 'f7e4d3c5-a162-4d43-8e54-8091abcd0001';
+  get diagnostics affected = row_count;
+  if affected <> 0 then raise exception 'viewer updated a feature through the policy'; end if;
+
+  delete from public.features where id = 'f7e4d3c5-a162-4d43-8e54-8091abcd0001';
+  get diagnostics affected = row_count;
+  if affected <> 0 then raise exception 'viewer deleted a feature through the policy'; end if;
+end;
+$$;
+
+-- Editor in organization B against organization A: the same policies, from the
+-- other side of the tenant boundary.
+select set_config('request.jwt.claim.sub', 'c4b1a0d2-7e3f-4a10-9b21-5d6e7f809a04', true);
+set local role authenticated;
+do $$
+declare
+  affected integer;
+begin
+  update public.features set title = 'cross-tenant edit' where id = 'f7e4d3c5-a162-4d43-8e54-8091abcd0001';
+  get diagnostics affected = row_count;
+  if affected <> 0 then raise exception 'editor B updated organization A through the policy'; end if;
+
+  delete from public.features where id = 'f7e4d3c5-a162-4d43-8e54-8091abcd0001';
+  get diagnostics affected = row_count;
+  if affected <> 0 then raise exception 'editor B deleted organization A through the policy'; end if;
+
+  begin
+    insert into public.features (layer_id, organization_id, geom, title)
+      values ('e6d3c2f4-9051-4c32-9d43-7f8091abc001', 'd5c2b1e3-8f40-4b21-8c32-6e7f8091ab01',
+              'SRID=4326;POINT(-104.99 39.74)'::public.wgs84_geometry, 'Cross-tenant insert');
+    raise exception 'editor B inserted into organization A through the policy';
+  exception when insufficient_privilege then
+    if sqlerrm <> 'new row violates row-level security policy for table "features"' then raise; end if;
+  end;
+end;
+$$;
+
+-- An editor of the organization can still write through the policies, so the
+-- refusals above are caused by the role, not by the grant alone.
+select set_config('request.jwt.claim.sub', 'c4b1a0d2-7e3f-4a10-9b21-5d6e7f809a02', true);
+set local role authenticated;
+do $$
+declare
+  affected integer;
+begin
+  update public.features set title = 'Policy editor' where id = 'f7e4d3c5-a162-4d43-8e54-8091abcd0001';
+  get diagnostics affected = row_count;
+  if affected <> 1 then raise exception 'editor A could not update through the policy'; end if;
+end;
+$$;
+reset role;
+
 rollback;

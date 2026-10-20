@@ -11,6 +11,22 @@ set -euo pipefail
 
 dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 psql_flags=(-X -q -At -v ON_ERROR_STOP=1)
+# The script commits fixtures, deletes audit rows, and disables the audit
+# immutability trigger for its cleanup. Those writes must never reach a database
+# that holds anything else. Refuse unless the caller opts in and the server reports
+# a throwaway database name. Both checks run before any write, and before the EXIT
+# trap is installed, so a refusal touches nothing.
+disposable_pattern='^neteoc_(test|race)[a-z0-9_]*$'
+if [ "${NETEOC_DISPOSABLE_DATABASE:-}" != "1" ]; then
+  echo "refusing to run: set NETEOC_DISPOSABLE_DATABASE=1 to confirm the target is a throwaway database. This script commits fixtures and clears audit rows." >&2
+  exit 2
+fi
+actual_database="$(psql -X -q -At -v ON_ERROR_STOP=1 -c 'select current_database()')" \
+  || { echo "refusing to run: cannot read the target database name" >&2; exit 2; }
+if ! [[ "$actual_database" =~ $disposable_pattern ]]; then
+  echo "refusing to run against \"$actual_database\": the database name must match $disposable_pattern" >&2
+  exit 2
+fi
 editor_one='b2c3d4e5-f6a7-4b89-9c0d-1e2f3a4b5c01'
 editor_two='b2c3d4e5-f6a7-4b89-9c0d-1e2f3a4b5c02'
 organization='b2c3d4e5-f6a7-4b89-9c0d-1e2f3a4b5c10'
@@ -18,6 +34,7 @@ feature_update_update='b2c3d4e5-f6a7-4b89-9c0d-1e2f3a4b5c31'
 feature_delete_update='b2c3d4e5-f6a7-4b89-9c0d-1e2f3a4b5c32'
 feature_update_delete='b2c3d4e5-f6a7-4b89-9c0d-1e2f3a4b5c33'
 feature_burst='b2c3d4e5-f6a7-4b89-9c0d-1e2f3a4b5c34'
+feature_delete_delete='b2c3d4e5-f6a7-4b89-9c0d-1e2f3a4b5c35'
 work="$(mktemp -d)"
 trap 'rm -rf "$work"; psql "${psql_flags[@]}" -f "$dir/feature_edits_race_cleanup.sql" >/dev/null || echo "feature race fixture cleanup failed" >&2' EXIT
 
@@ -133,5 +150,18 @@ done
 [ "$successes" -eq 1 ] || fail "burst: expected exactly one of $sessions sessions to write, got $successes"
 row="$(query "select title || '|' || revision from public.features where id = '$feature_burst'")"
 [ "$row" = "Burst $winner|2" ] || fail "burst: stored [$row] but session $winner won"
+
+# Scenario 5: delete against delete. Both editors read revision 1. The second delete
+# waits for the first, then finds the feature gone. It is told the feature was
+# deleted, and exactly one deletion event exists, for the first editor.
+hold_then_race delete-delete feature_edits_race_hold_delete.sql feature_edits_race_delete.sql \
+  "$feature_delete_delete" "$editor_one" '{}' "$editor_two" '{}'
+[ "$racer_status" -ne 0 ] || fail "delete/delete: the second delete succeeded against a deleted feature"
+grep -q 'PT410' "$work/delete-delete-racer.log" && grep -q 'feature was deleted' "$work/delete-delete-racer.log" \
+  || fail "delete/delete: loser was not told the feature was deleted: $(cat "$work/delete-delete-racer.log")"
+[ "$(query "select count(*) from app_private.feature_audit_events where feature_id = '$feature_delete_delete'")" -eq 1 ] \
+  || fail "delete/delete: expected exactly one deletion event"
+[ "$(query "select actor_user_id from app_private.feature_audit_events where feature_id = '$feature_delete_delete'")" = "$editor_one" ] \
+  || fail "delete/delete: the deletion event names the wrong actor"
 
 echo "feature race test: one writer wins each race, losers conflict, winner's data intact"

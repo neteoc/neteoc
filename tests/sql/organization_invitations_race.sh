@@ -6,6 +6,22 @@ set -euo pipefail
 
 dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 psql_flags=(-X -q -At -v ON_ERROR_STOP=1)
+# The script commits fixtures, deletes audit rows, and disables the audit
+# immutability trigger for its cleanup. Those writes must never reach a database
+# that holds anything else. Refuse unless the caller opts in and the server reports
+# a throwaway database name. Both checks run before any write, and before the EXIT
+# trap is installed, so a refusal touches nothing.
+disposable_pattern='^neteoc_(test|race)[a-z0-9_]*$'
+if [ "${NETEOC_DISPOSABLE_DATABASE:-}" != "1" ]; then
+  echo "refusing to run: set NETEOC_DISPOSABLE_DATABASE=1 to confirm the target is a throwaway database. This script commits fixtures and clears audit rows." >&2
+  exit 2
+fi
+actual_database="$(psql -X -q -At -v ON_ERROR_STOP=1 -c 'select current_database()')" \
+  || { echo "refusing to run: cannot read the target database name" >&2; exit 2; }
+if ! [[ "$actual_database" =~ $disposable_pattern ]]; then
+  echo "refusing to run against \"$actual_database\": the database name must match $disposable_pattern" >&2
+  exit 2
+fi
 invitee_one='f0e1d2c3-b4a5-4968-8a7b-6c5d4e3f2a02'
 invitee_two='f0e1d2c3-b4a5-4968-8a7b-6c5d4e3f2a03'
 organization='f0e1d2c3-b4a5-4968-8a7b-6c5d4e3f2a10'

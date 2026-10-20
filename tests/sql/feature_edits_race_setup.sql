@@ -20,4 +20,4 @@ insert into public.features (id, layer_id, organization_id, geom, title)
 select ('b2c3d4e5-f6a7-4b89-9c0d-1e2f3a4b5c3' || n)::uuid,
        'b2c3d4e5-f6a7-4b89-9c0d-1e2f3a4b5c20', 'b2c3d4e5-f6a7-4b89-9c0d-1e2f3a4b5c10',
        'SRID=4326;POINT(-104.9 39.7)', 'Race seed ' || n
-from generate_series(1, 4) as n;
+from generate_series(1, 5) as n;

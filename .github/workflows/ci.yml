@@ -68,6 +68,12 @@ jobs:
           psql -X -v ON_ERROR_STOP=1 -v VERBOSITY=verbose -f tests/sql/feature_storage.sql
           psql -X -v ON_ERROR_STOP=1 -v VERBOSITY=verbose -f tests/sql/layer_feature_queries.sql
           psql -X -v ON_ERROR_STOP=1 -v VERBOSITY=verbose -f tests/sql/feature_edits.sql
+      - name: Run race tests against the disposable test database
+        # These scripts commit fixtures and clear audit rows. The opt-in is set only
+        # here, and each script also checks the database name the server reports.
+        env:
+          NETEOC_DISPOSABLE_DATABASE: '1'
+        run: |
           bash tests/sql/organization_invitations_race.sh
           bash tests/sql/feature_edits_race.sh
 

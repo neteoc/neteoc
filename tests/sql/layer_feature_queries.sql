@@ -50,6 +50,17 @@ select
   timestamptz '2026-10-01 00:00:00+00'
 from generate_series(1, 3) as i;
 
+-- A sibling layer in organization A. Without it, a query that drops the layer
+-- predicate returns the same rows as the real one, and the mutation survives.
+insert into public.layers (id, organization_id, title) values
+  ('d3b2c1e0-4f60-4c7d-8e8f-9a0b1c2d3e04', 'c2a1b0d9-3e5f-4b6c-9d7e-8f9a0b1c2d01', 'Sibling layer A');
+select set_config('request.jwt.claim.sub', 'b1f0a9c3-2d4e-4a5b-8c6d-7e8f9a0b1c01', true);
+insert into public.features (id, layer_id, organization_id, geom, title, created_at) values
+  ('f3000000-0000-4000-8000-000000000001', 'd3b2c1e0-4f60-4c7d-8e8f-9a0b1c2d3e04', 'c2a1b0d9-3e5f-4b6c-9d7e-8f9a0b1c2d01',
+   'SRID=4326;POINT(-104.5 39.5)', 'Sibling feature 1', timestamptz '2026-10-01 00:00:04.5+00'),
+  ('f3000000-0000-4000-8000-000000000002', 'd3b2c1e0-4f60-4c7d-8e8f-9a0b1c2d3e04', 'c2a1b0d9-3e5f-4b6c-9d7e-8f9a0b1c2d01',
+   'SRID=4326;POINT(-104.5 39.5)', 'Sibling feature 2', timestamptz '2026-10-01 00:00:13.5+00');
+
 -- Catalog facts are asserted directly, not inferred from an error.
 do $$
 declare

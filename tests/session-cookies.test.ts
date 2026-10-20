@@ -1,10 +1,6 @@
-import { describe, expect, mock, test } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 
-// supabase.ts imports Cloudflare's env binding, which Bun cannot load. The test
-// supplies an empty binding; clearSupabaseCookies reads no configuration.
-mock.module('cloudflare:workers', () => ({ env: {} }));
-
-const { clearSupabaseCookies } = await import('../src/lib/supabase');
+const { clearSupabaseCookies } = await import('../src/lib/session-cookies');
 
 interface Deleted {
   name: string;

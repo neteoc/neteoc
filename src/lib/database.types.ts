@@ -14,6 +14,169 @@ export type Database = {
   };
   public: {
     Tables: {
+      features: {
+        Row: {
+          created_at: string;
+          created_by: string;
+          description: string | null;
+          geom: unknown;
+          id: string;
+          layer_id: string;
+          organization_id: string;
+          properties: NonNullable<Json>;
+          revision: number;
+          status: string | null;
+          title: string;
+          updated_at: string;
+          updated_by: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          created_at?: string;
+          created_by: string;
+          description?: string | null;
+          geom: unknown;
+          id?: string;
+          layer_id: string;
+          organization_id: string;
+          properties?: NonNullable<Json>;
+          revision?: number;
+          status?: string | null;
+          title: string;
+          updated_at?: string;
+          updated_by: string;
+        };
+        Update: {
+          created_at?: string;
+          created_by?: string;
+          description?: string | null;
+          geom?: unknown;
+          id?: string;
+          layer_id?: string;
+          organization_id?: string;
+          properties?: NonNullable<Json>;
+          revision?: number;
+          status?: string | null;
+          title?: string;
+          updated_at?: string;
+          updated_by?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'features_layer_organization_fkey';
+            columns: ['layer_id', 'organization_id'];
+            isOneToOne: false;
+            referencedRelation: 'layers';
+            referencedColumns: ['id', 'organization_id'];
+          },
+        ];
+      };
+      layers: {
+        Row: {
+          created_at: string;
+          id: string;
+          organization_id: string;
+          title: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          created_at?: string;
+          id?: string;
+          organization_id: string;
+          title: string;
+        };
+        Update: {
+          created_at?: string;
+          id?: string;
+          organization_id?: string;
+          title?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'layers_organization_id_fkey';
+            columns: ['organization_id'];
+            isOneToOne: false;
+            referencedRelation: 'organizations';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
+      map_layers: {
+        Row: {
+          created_at: string;
+          default_visible: boolean;
+          layer_id: string;
+          map_id: string;
+          organization_id: string;
+          position: number;
+        };
+        ComputedFields: never;
+        Insert: {
+          created_at?: string;
+          default_visible?: boolean;
+          layer_id: string;
+          map_id: string;
+          organization_id: string;
+          position: number;
+        };
+        Update: {
+          created_at?: string;
+          default_visible?: boolean;
+          layer_id?: string;
+          map_id?: string;
+          organization_id?: string;
+          position?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'map_layers_layer_organization_fkey';
+            columns: ['layer_id', 'organization_id'];
+            isOneToOne: false;
+            referencedRelation: 'layers';
+            referencedColumns: ['id', 'organization_id'];
+          },
+          {
+            foreignKeyName: 'map_layers_map_organization_fkey';
+            columns: ['map_id', 'organization_id'];
+            isOneToOne: false;
+            referencedRelation: 'maps';
+            referencedColumns: ['id', 'organization_id'];
+          },
+        ];
+      };
+      maps: {
+        Row: {
+          created_at: string;
+          description: string | null;
+          id: string;
+          organization_id: string;
+          title: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          created_at?: string;
+          description?: string | null;
+          id?: string;
+          organization_id: string;
+          title: string;
+        };
+        Update: {
+          created_at?: string;
+          description?: string | null;
+          id?: string;
+          organization_id?: string;
+          title?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'maps_organization_id_fkey';
+            columns: ['organization_id'];
+            isOneToOne: false;
+            referencedRelation: 'organizations';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
       memberships: {
         Row: {
           created_at: string;
@@ -21,6 +184,7 @@ export type Database = {
           role: Database['public']['Enums']['organization_role'];
           user_id: string;
         };
+        ComputedFields: never;
         Insert: {
           created_at?: string;
           organization_id: string;
@@ -43,12 +207,67 @@ export type Database = {
           },
         ];
       };
+      organization_invitations: {
+        Row: {
+          consumed_at: string | null;
+          consumed_by: string | null;
+          created_at: string;
+          created_by: string;
+          email: string;
+          expires_at: string;
+          id: string;
+          organization_id: string;
+          revoked_at: string | null;
+          revoked_by: string | null;
+          role: Database['public']['Enums']['organization_role'];
+          token_digest: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          consumed_at?: string | null;
+          consumed_by?: string | null;
+          created_at?: string;
+          created_by: string;
+          email: string;
+          expires_at: string;
+          id?: string;
+          organization_id: string;
+          revoked_at?: string | null;
+          revoked_by?: string | null;
+          role: Database['public']['Enums']['organization_role'];
+          token_digest: string;
+        };
+        Update: {
+          consumed_at?: string | null;
+          consumed_by?: string | null;
+          created_at?: string;
+          created_by?: string;
+          email?: string;
+          expires_at?: string;
+          id?: string;
+          organization_id?: string;
+          revoked_at?: string | null;
+          revoked_by?: string | null;
+          role?: Database['public']['Enums']['organization_role'];
+          token_digest?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'organization_invitations_organization_id_fkey';
+            columns: ['organization_id'];
+            isOneToOne: false;
+            referencedRelation: 'organizations';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
       organizations: {
         Row: {
           created_at: string;
           id: string;
           name: string;
         };
+        ComputedFields: never;
         Insert: {
           created_at?: string;
           id?: string;
@@ -66,7 +285,41 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
-      [_ in never]: never;
+      accept_organization_invitation: {
+        Args: { p_token: string };
+        Returns: string;
+      };
+      issue_organization_invitation: {
+        Args: {
+          p_email: string;
+          p_lifetime?: string;
+          p_organization_id: string;
+          p_role: Database['public']['Enums']['organization_role'];
+        };
+        Returns: string;
+      };
+      list_layer_features: {
+        Args: {
+          p_after_created_at?: string;
+          p_after_id?: string;
+          p_byte_budget?: number;
+          p_layer_id: string;
+          p_limit: number;
+          p_max_lat: number;
+          p_max_lon: number;
+          p_min_lat: number;
+          p_min_lon: number;
+        };
+        Returns: Json;
+      };
+      reorder_map_layers: {
+        Args: { p_layer_ids: string[]; p_map_id: string };
+        Returns: undefined;
+      };
+      revoke_organization_invitation: {
+        Args: { p_invitation_id: string };
+        Returns: undefined;
+      };
     };
     Enums: {
       organization_role: 'admin' | 'editor' | 'viewer';

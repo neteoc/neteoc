@@ -42,17 +42,25 @@ confirming that this request did not create an account. `bun run check` passed
 with Bun 1.4.3, including Astro diagnostics and the Worker build. Bun audit,
 Semgrep, and Trivy reported no high or critical findings in this slice.
 
-PostGIS is not yet installed. The first tracked migration removed `PUBLIC`,
-`anon`, and `authenticated` execute privileges from the pre-existing
-`public.rls_auto_enable()` event-trigger helper; negative privilege checks pass
-and the security advisor no longer flags the function. The corresponding event
-trigger is not installed, so each future table migration must enable RLS
-explicitly. The development Auth Site URL is `http://localhost:8787`, and the
-exact `/auth/confirm` redirect is allowed. Custom SMTP and the code-only Magic
-Link OTP template are configured. A local sign-in request produced a Postmark
-`Delivered` event. Code confirmation, session refresh, sign-out, and invitation
-acceptance remain unverified. A verified NetEOC sender is needed before a pilot;
-the development project currently uses a temporary sender.
+PostGIS is tracked in the migration that adds feature storage. That migration
+installs it into the `extensions` schema and refuses to continue if it lands
+anywhere else. The `features` table stores 2D WGS84 point, line, and polygon
+geometry with bounded attributes, a stable ID, a trigger-stamped revision and
+actor, and RLS for anonymous, viewer, editor, and cross-tenant access. CI runs
+the authorization tests in a clean database on PostgreSQL 17 with PostGIS 3.6,
+and the same tests pass on the local Supabase stack with PostGIS 3.3. NetEOC Dev
+has not received this migration; applying it waits for the Dev application step.
+The first tracked migration removed `PUBLIC`, `anon`, and `authenticated`
+execute privileges from the pre-existing `public.rls_auto_enable()`
+event-trigger helper; negative privilege checks pass and the security advisor no
+longer flags the function. The corresponding event trigger is not installed, so
+each future table migration must enable RLS explicitly. The development Auth
+Site URL is `http://localhost:8787`, and the exact `/auth/confirm` redirect is
+allowed. Custom SMTP and the code-only Magic Link OTP template are configured. A
+local sign-in request produced a Postmark `Delivered` event. Code confirmation,
+session refresh, sign-out, and invitation acceptance remain unverified. A
+verified NetEOC sender is needed before a pilot; the development project
+currently uses a temporary sender.
 
 The foundation's actionlint, TruffleHog tree and history scans, and CI passed at
 the previous checkpoint. The initial commit predates the Conventional Commit

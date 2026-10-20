@@ -19,12 +19,14 @@ Read these documents in order:
    and integration tests for the runtime slice.
 8. [Development guidelines](development.md): setup, checks, and contribution
    rules.
-9. [Security](security.md): threat model, scanning, and reporting.
-10. [Repository status](status.md): completed work, verification, and next
+9. [Threat model](threat-model.md): assets, trust boundaries, prioritized abuse
+   paths, and release checks.
+10. [Security](security.md): scanning, reporting, and security review gates.
+11. [Repository status](status.md): completed work, verification, and next
     steps.
-11. [Tenant kernel](tenant-kernel.md): first organization and membership read
+12. [Tenant kernel](tenant-kernel.md): first organization and membership read
     boundary and its authorization test.
-12. [Operator bootstrap](operator-bootstrap.md): the privileged, audited path
+13. [Operator bootstrap](operator-bootstrap.md): the privileged, audited path
     for appointing the first platform admin and organization admin.
 
 Keep substantive documentation here in Markdown. If PDFs become useful, put them

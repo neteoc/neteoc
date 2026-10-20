@@ -5,11 +5,12 @@ flow or the repository maintainers; never include credentials in a public issue.
 If a secret is exposed, revoke/rotate it immediately and investigate history,
 build logs, and downstream access. A Git revert does not remove the exposure.
 
-The primary risks are cross-organization data access, public/unlisted/internal
-visibility confusion, privileged RLS bypass, malicious third-party GIS URLs,
-photo metadata or storage leakage, exported GIS credentials, and unavailable or
-stale data during response operations. See the [architecture](architecture.md)
-for proposed controls and [PRD](prd.md) for acceptance evidence.
+The [MVP threat model](threat-model.md) maps assets, trust boundaries, abuse
+paths, and release tests. Its highest-priority risks include cross-organization
+access, visibility confusion, privileged RLS bypass, malicious third-party GIS
+URLs, photo or credential leakage, and unavailable or stale data during response
+operations. See the [architecture](architecture.md) for the access contract and
+[PRD](prd.md) for acceptance evidence.
 
 The repository uses three complementary scanners: TruffleHog for credentials,
 Trivy for vulnerable dependencies, configuration, and secrets, and Semgrep for

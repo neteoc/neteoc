@@ -76,6 +76,41 @@ begin
 end;
 $$;
 
+-- Assert grants and function configuration directly. An anonymous denial must
+-- come from the missing grant, not from the function's own role check, which
+-- raises the same SQLSTATE. CI grants anon and authenticated everything by
+-- default (see ci-bootstrap.sql), so these checks fail if a revoke is missing.
+do $$
+declare
+  t text;
+begin
+  if has_function_privilege('anon', 'public.reorder_map_layers(uuid, uuid[])', 'execute') then
+    raise exception 'anon can execute reorder_map_layers';
+  end if;
+  if not has_function_privilege('authenticated', 'public.reorder_map_layers(uuid, uuid[])', 'execute') then
+    raise exception 'authenticated cannot execute reorder_map_layers';
+  end if;
+  foreach t in array array['public.maps', 'public.layers', 'public.map_layers'] loop
+    if has_table_privilege('anon', t, 'select, insert, update, delete, truncate, references, trigger') then
+      raise exception 'anon holds a privilege on %', t;
+    end if;
+    if not has_table_privilege('authenticated', t, 'select') then
+      raise exception 'authenticated cannot read %', t;
+    end if;
+  end loop;
+  -- Reorder runs with the caller's rights and a pinned search path. Losing
+  -- either property would change what RLS and name resolution apply.
+  if not exists (
+    select 1 from pg_proc
+    where oid = 'public.reorder_map_layers(uuid, uuid[])'::regprocedure
+      and not prosecdef
+      and proconfig @> array['search_path=""']
+  ) then
+    raise exception 'reorder_map_layers must be security invoker with search_path pinned';
+  end if;
+end;
+$$;
+
 -- Editor in organization A: reads stay in A, cross-tenant writes are denied,
 -- and same-organization writes, reorder, and detach behave as specified.
 select set_config('request.jwt.claim.sub', '189bddc1-f820-4028-aeda-ff677f18b242', true);
@@ -114,6 +149,20 @@ begin
   delete from public.layers where id = '6bdc937a-b378-4794-9bce-b43217ea069c';
   get diagnostics affected = row_count;
   if affected <> 0 then raise exception 'editor A deleted organization B layer'; end if;
+  delete from public.maps where id = 'b7234d8d-d678-40ad-a7fa-2faaba2aa57f';
+  get diagnostics affected = row_count;
+  if affected <> 0 then raise exception 'editor A deleted organization B map'; end if;
+  delete from public.map_layers where map_id = 'b7234d8d-d678-40ad-a7fa-2faaba2aa57f';
+  get diagnostics affected = row_count;
+  if affected <> 0 then raise exception 'editor A deleted organization B associations'; end if;
+
+  -- One layer appears on a map at most once. The primary key rejects a second attach.
+  begin
+    insert into public.map_layers (map_id, layer_id, organization_id, position)
+      values ('31dd3909-8050-4085-8c0a-1625a5b4b9d2', '5b8e8e0e-c19b-456f-8b6c-4270e03d5990', 'e048500e-d098-49c7-a0a0-8b66298ba22e', 9);
+    raise exception 'same layer attached to a map twice';
+  exception when unique_violation then null;
+  end;
 
   -- The row passes RLS because it names organization A, but its layer belongs to B.
   begin
@@ -349,9 +398,11 @@ begin
   get diagnostics affected = row_count;
   if affected <> 0 then raise exception 'viewer deleted a layer'; end if;
 
+  -- The denied update targeted map A1. Its value is false here, so a denied
+  -- write must leave it false.
   if (select default_visible from public.map_layers
-      where map_id = 'eb52639a-e4ca-48d2-8c62-5d04fc58f3b5'
-        and layer_id = '5b8e8e0e-c19b-456f-8b6c-4270e03d5990') is not true then
+      where map_id = '31dd3909-8050-4085-8c0a-1625a5b4b9d2'
+        and layer_id = '5b8e8e0e-c19b-456f-8b6c-4270e03d5990') is not false then
     raise exception 'viewer write changed default visibility state';
   end if;
 end;
@@ -407,6 +458,11 @@ begin
   begin
     perform 1 from public.map_layers limit 1;
     raise exception 'anonymous association read succeeded';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    perform 1 from public.layers limit 1;
+    raise exception 'anonymous layer read succeeded';
   exception when insufficient_privilege then null;
   end;
   begin

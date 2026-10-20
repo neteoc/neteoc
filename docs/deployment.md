@@ -56,6 +56,10 @@ settings:
 | Build command  | `bun run build`                                                                                                                  |
 | Deploy command | `node node_modules/wrangler/bin/wrangler.js deploy && node scripts/check-deployment.mjs https://neteoc.kerryhatcher.workers.dev` |
 
+The `SESSION` KV binding in `wrangler.jsonc` uses the existing `neteoc-session`
+namespace. Its explicit ID avoids an auto-provisioning conflict after a failed
+first deploy has already created the namespace.
+
 Keep Bun 1.4.3 selected; Workers Builds detects it from `.bun-version` and
 installs dependencies with `bun install --frozen-lockfile` before running the
 build command. Keep the Cloudflare-managed API token selected. The Worker name

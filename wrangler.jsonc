@@ -9,6 +9,9 @@
   "secrets": {
     "required": ["SUPABASE_URL", "SUPABASE_PUBLISHABLE_KEY"],
   },
+  "kv_namespaces": [
+    { "binding": "SESSION", "id": "4356e95d268f4d9697329ab271bd0588" },
+  ],
   "ratelimits": [
     {
       "name": "LOGIN_IP_LIMIT",

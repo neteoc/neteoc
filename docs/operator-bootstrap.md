@@ -15,6 +15,9 @@ migration was applied to NetEOC Dev.
 2. Choose a durable operator reference, such as a change ticket ID and operator
    handle. It is recorded in `app_private.audit_events` and must be 3–120
    trimmed characters. Do not put credentials or private incident data in it.
+   The SQL editor operator is the actor identified by this reference. The
+   appointed Auth user is recorded separately as `subject_user_id`; neither
+   appointed user is represented as having executed the SQL.
 3. In the privileged SQL editor, bootstrap the first platform admin once:
 
    ```sql
@@ -40,10 +43,12 @@ migration was applied to NetEOC Dev.
    fails, it leaves no partial organization.
 
 The first platform admin cannot be bootstrapped twice. The organization function
-requires a currently appointed platform admin UUID. At this stage, only an
-operator can invoke either function; an application-facing platform-admin path
-has not been built. Future offboarding must account for audit references before
-deleting Auth users. An operator should not delete or alter audit rows.
+requires a currently appointed platform admin UUID as context; the SQL editor
+operator still performs the action and supplies the operator reference. At this
+stage, only an operator can invoke either function; an application-facing
+platform-admin path has not been built. Future offboarding must account for
+audit references before deleting Auth users. An operator should not delete or
+alter audit rows.
 
 `tests/sql/operator_bootstrap.sql` covers successful creation, the second-admin
 and unappointed-admin denials, atomic rollback on invalid input, and denial of

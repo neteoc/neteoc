@@ -51,6 +51,20 @@ begin
       where operator_ref like 'test-change-%') <> 2 then
     raise exception 'bootstrap audit trail missing or duplicated';
   end if;
+  if not exists (
+    select 1 from app_private.audit_events
+    where action = 'platform_admin_bootstrapped'
+      and subject_user_id = '7644a5f6-0390-4f51-94df-b51e642e1945'
+      and operator_ref = 'test-change-001'
+  ) or not exists (
+    select 1 from app_private.audit_events
+    where action = 'organization_bootstrapped'
+      and subject_user_id = '398a968a-82d5-42e9-a225-47ff213c85b5'
+      and organization_id = created_id
+      and operator_ref = 'test-change-003'
+  ) then
+    raise exception 'operator and affected user are misattributed';
+  end if;
 
   begin
     perform app_private.bootstrap_organization(
@@ -64,6 +78,18 @@ begin
   end;
   if exists (select 1 from public.organizations where name = 'Must roll back') then
     raise exception 'failed bootstrap left an organization behind';
+  end if;
+end;
+$$;
+
+do $$
+begin
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema = 'app_private' and table_name = 'audit_events'
+      and column_name = 'actor_user_id'
+  ) then
+    raise exception 'bootstrap subject is mislabeled as actor';
   end if;
 end;
 $$;

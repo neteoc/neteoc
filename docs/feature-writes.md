@@ -178,6 +178,31 @@ an edit. #19 adds the sharing audit when visibility tiers arrive. A later reader
 who sees no create or update record should read that as the design, not as a
 gap.
 
+## Notices from ST_IsValid
+
+PostgreSQL's one-argument `ST_IsValid` raises a NOTICE when a geometry is
+invalid. The notice names the reason and the location, for example
+`Self-intersection at or near point -104.75 39.7`, so it carries the submitted
+coordinates. A notice reaches client and database logs, and feature content must
+never reach either. The two-argument form with flags `0` gives the same answer
+with no notice.
+
+- `app_private.parse_feature_geometry`, which every create and update goes
+  through, uses the flags form. A bad geometry produces only the fixed `22023`
+  message.
+- `tests/sql/feature_edits_run.sh` runs the suite and fails if the server raises
+  any notice other than the one that announces a `TRUNCATE ... CASCADE` table
+  name. The notice text is withheld from its output. The mutation harness proves
+  the check with the one-argument call restored: the suite fails on that notice.
+- The table constraint `features_geom_valid` from #42 still uses the
+  one-argument form, and it can still raise the notice. Application roles cannot
+  reach it, because every write goes through the functions, which validate
+  first. The table owner bypasses RLS and can reach it with a direct insert.
+  That constraint lives in a merged migration, and changing it would be a
+  forward ALTER, which is a separate decision and is not made here.
+  `tests/sql/feature_storage.sql` inserts invalid geometries as the owner, so
+  its output carries those notices. The suite does not fail on them.
+
 ## Operations and retention
 
 These consequences follow from the audit rules. They belong in the offboarding
@@ -221,11 +246,11 @@ either Worker version runs against either schema.
 
 ## Verification
 
-- `tests/sql/feature_edits.sql` calls each function directly as `authenticated`
-  (and as `anon`) and asserts each refusal by SQLSTATE and message, with a
-  boundary pair for each ceiling. It asserts grants with `has_table_privilege`,
-  `has_column_privilege`, and `has_function_privilege`, and asserts the pinned
-  search paths in `proconfig`.
+- `tests/sql/feature_edits.sql`, run through `tests/sql/feature_edits_run.sh`,
+  calls each function directly as `authenticated` (and as `anon`) and asserts
+  each refusal by SQLSTATE and message, with a boundary pair for each ceiling.
+  It asserts grants with `has_table_privilege`, `has_column_privilege`, and
+  `has_function_privilege`, and asserts the pinned search paths in `proconfig`.
 - `tests/sql/feature_edits_race.sh` runs concurrent sessions, described above.
   It refuses to run unless `NETEOC_DISPOSABLE_DATABASE=1` is set and the server
   reports a database name matching `^neteoc_(test|race)`. It checks both before

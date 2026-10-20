@@ -135,8 +135,17 @@ MUTATIONS = [
          "  if false then", None),
         ("  if extensions.st_xmin(v_geom) < -180 or extensions.st_xmax(v_geom) > 180\n    or extensions.st_ymin(v_geom) < -90 or extensions.st_ymax(v_geom) > 90 then",
          "  if false then", None)]),
-    ("validity-check-removed", FEATURES, "sql", "geometry: one-vertex line", [
-        ("  if not extensions.st_isvalid(v_geom) then", "  if false then", None)]),
+    # With the function's check gone, the one-vertex line reaches the table's
+    # features_geom_valid CHECK, which uses the one-argument ST_IsValid and raises the
+    # NOTICE. That is the owner-only path the doc records, and the wrapper catches it
+    # first. The label the suite would otherwise report is "geometry: one-vertex line".
+    ("validity-check-removed", FEATURES, "sql", "the server raised a NOTICE", [
+        ("  if not extensions.st_isvalid(v_geom, 0) then", "  if false then", None)]),
+    # The one-argument ST_IsValid raises a NOTICE with the reason and the location of a
+    # self-intersection, which includes the submitted coordinates. The suite must fail
+    # on that notice, through the same wrapper CI runs.
+    ("one-arg-isvalid-notice", FEATURES, "sql", "the server raised a NOTICE", [
+        ("  if not extensions.st_isvalid(v_geom, 0) then", "  if not extensions.st_isvalid(v_geom) then", None)]),
     ("shape-check-removed", FEATURES, "sql", "geometry: missing type", [
         ("    or (select array_agg(k order by k) from jsonb_object_keys(p_geometry) as k)\n      is distinct from array['coordinates', 'type']\n",
          "\n", None)]),
@@ -200,7 +209,10 @@ def apply_edits(original, edits, name):
 
 def run_suite(kind):
     if kind == "sql":
-        result = psql(["-v", "VERBOSITY=verbose", "-f", str(ROOT / "tests/sql/feature_edits.sql")], DB)
+        # The wrapper is what CI runs: it fails on any notice besides the cascade one.
+        env = dict(os.environ, PGDATABASE=DB)
+        result = subprocess.run(["bash", str(ROOT / "tests/sql/feature_edits_run.sh")],
+                                env=env, capture_output=True, text=True)
     elif kind == "storage":
         result = psql(["-v", "VERBOSITY=verbose", "-f", str(ROOT / "tests/sql/feature_storage.sql")], DB)
     else:

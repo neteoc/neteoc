@@ -374,7 +374,11 @@ begin
     or extensions.st_ymin(v_geom) < -90 or extensions.st_ymax(v_geom) > 90 then
     raise exception '%', v_range_message using errcode = 'invalid_parameter_value';
   end if;
-  if not extensions.st_isvalid(v_geom) then
+  -- The flags form. The one-argument form raises a NOTICE that names the reason and
+  -- the location of a self-intersection, with the submitted coordinates. A notice
+  -- reaches client and database logs, and feature content must never reach either.
+  -- Flags 0 is the default validity test, with no notice.
+  if not extensions.st_isvalid(v_geom, 0) then
     raise exception '%', v_valid_message using errcode = 'invalid_parameter_value';
   end if;
   return v_geom::public.wgs84_geometry;

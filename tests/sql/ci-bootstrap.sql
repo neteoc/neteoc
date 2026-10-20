@@ -18,3 +18,10 @@ $$;
 
 grant usage on schema auth to authenticated;
 grant execute on function auth.uid() to authenticated;
+
+-- Supabase grants new public tables and functions to anon and authenticated by
+-- default. Mirror that here so every revoke in a migration is exercised, not
+-- just assumed. Without these defaults a missing revoke passes CI and fails on
+-- a real project.
+alter default privileges in schema public grant all on tables to anon, authenticated;
+alter default privileges in schema public grant execute on functions to anon, authenticated;

@@ -296,6 +296,44 @@ begin
   ) then
     raise exception 'features lacks the deletion audit trigger';
   end if;
+  -- Statement-level BEFORE TRUNCATE, so the refusal happens once per statement.
+  if not exists (
+    select 1 from pg_trigger
+    where tgrelid = 'public.features'::regclass
+      and tgname = 'features_refuse_truncate'
+      and tgenabled = 'O'
+      and (tgtype & 2) = 2    -- BEFORE
+      and (tgtype & 32) = 32  -- TRUNCATE
+      and (tgtype & 1) = 0    -- statement level
+  ) then
+    raise exception 'features lacks the BEFORE TRUNCATE statement trigger';
+  end if;
+end;
+$$;
+
+-- Structural proxy for the compare-and-set. The behavioural race tests prove the
+-- predicate works; this fails if someone moves the revision test out of the write
+-- statement, for example into a separate SELECT before it. It is brittle on purpose:
+-- a failure means the write's shape changed and the race evidence needs a rerun.
+do $$
+declare
+  v_src text;
+  v_fn text;
+  v_write text;
+  v_end text;
+begin
+  foreach v_fn in array array['public.update_feature', 'public.delete_feature'] loop
+    select pg_get_functiondef((v_fn || case when v_fn like '%update%' then '(uuid, integer, jsonb)' else '(uuid, integer)' end)::regprocedure)
+      into v_src;
+    v_write := case when v_fn like '%update%' then 'update public.features as f' else 'delete from public.features as f' end;
+    v_end := 'returning f.* into v_row;';
+    if position(v_write in v_src) = 0 or position(v_end in v_src) = 0
+      or position('and f.revision = p_expected_revision' in v_src) = 0
+      or position('and f.revision = p_expected_revision' in v_src)
+        not between position(v_write in v_src) and position(v_end in v_src) then
+      raise exception '% does not check the revision inside its write statement', v_fn;
+    end if;
+  end loop;
 end;
 $$;
 
@@ -505,10 +543,19 @@ begin
     ('title empty', '''''', 'null', 'null', '''{}''::jsonb', 'title must be 1 to 120 characters with no leading or trailing space'),
     ('title blank', '''   ''', 'null', 'null', '''{}''::jsonb', 'title must be 1 to 120 characters with no leading or trailing space'),
     ('title padded', '''padded ''', 'null', 'null', '''{}''::jsonb', 'title must be 1 to 120 characters with no leading or trailing space'),
+    ('title tab', 'chr(9)', 'null', 'null', '''{}''::jsonb', 'title must be 1 to 120 characters with no leading or trailing space'),
+    ('title newline', 'chr(10)', 'null', 'null', '''{}''::jsonb', 'title must be 1 to 120 characters with no leading or trailing space'),
+    ('title non-breaking space', 'chr(160)', 'null', 'null', '''{}''::jsonb', 'title must be 1 to 120 characters with no leading or trailing space'),
+    ('title ideographic space', 'chr(12288)', 'null', 'null', '''{}''::jsonb', 'title must be 1 to 120 characters with no leading or trailing space'),
+    ('title trailing tab', '''x'' || chr(9)', 'null', 'null', '''{}''::jsonb', 'title must be 1 to 120 characters with no leading or trailing space'),
+    ('title leading non-breaking space', 'chr(160) || ''x''', 'null', 'null', '''{}''::jsonb', 'title must be 1 to 120 characters with no leading or trailing space'),
     ('title 121', quote_literal(repeat('t', 121)), 'null', 'null', '''{}''::jsonb', 'title must be 1 to 120 characters with no leading or trailing space'),
     ('description 2001', '''ok''', quote_literal(repeat('d', 2001)), 'null', '''{}''::jsonb', 'description must be at most 2000 characters'),
     ('status empty', '''ok''', 'null', '''''', '''{}''::jsonb', 'status must be 1 to 40 characters with no leading or trailing space'),
     ('status padded', '''ok''', 'null', '''open ''', '''{}''::jsonb', 'status must be 1 to 40 characters with no leading or trailing space'),
+    ('status tab', '''ok''', 'null', 'chr(9)', '''{}''::jsonb', 'status must be 1 to 40 characters with no leading or trailing space'),
+    ('status newline', '''ok''', 'null', 'chr(10)', '''{}''::jsonb', 'status must be 1 to 40 characters with no leading or trailing space'),
+    ('status non-breaking space', '''ok''', 'null', 'chr(160)', '''{}''::jsonb', 'status must be 1 to 40 characters with no leading or trailing space'),
     ('status 41', '''ok''', 'null', quote_literal(repeat('s', 41)), '''{}''::jsonb', 'status must be 1 to 40 characters with no leading or trailing space'),
     ('attributes null', '''ok''', 'null', 'null', 'null::jsonb', 'attributes must be a JSON object of at most 4096 bytes'),
     ('attributes array', '''ok''', 'null', 'null', '''[]''::jsonb', 'attributes must be a JSON object of at most 4096 bytes'),
@@ -529,6 +576,8 @@ begin
       '22023', r.message);
   end loop;
 
+  -- Whitespace inside a title is kept, so only the ends are refused.
+  perform public.create_feature(pg_temp.id('layer_a1'), pg_temp.point(-104.9, 39.7), 'Interior' || chr(160) || 'space');
   -- The boundary values on the accepted side.
   perform public.create_feature(pg_temp.id('layer_a1'), pg_temp.point(-104.9, 39.7), repeat('t', 120),
     repeat('d', 2000), repeat('s', 40), jsonb_build_object('k', repeat('x', 4096 - 9)));
@@ -667,6 +716,9 @@ begin
     ('title null', '''{"title": null}''::jsonb', 'title must be 1 to 120 characters with no leading or trailing space'),
     ('title number', '''{"title": 5}''::jsonb', 'title must be 1 to 120 characters with no leading or trailing space'),
     ('title padded', '''{"title": " padded"}''::jsonb', 'title must be 1 to 120 characters with no leading or trailing space'),
+    ('title tab', format('jsonb_build_object(''title'', %L)', chr(9)), 'title must be 1 to 120 characters with no leading or trailing space'),
+    ('title non-breaking space', format('jsonb_build_object(''title'', %L)', chr(160)), 'title must be 1 to 120 characters with no leading or trailing space'),
+    ('status newline', format('jsonb_build_object(''status'', %L)', chr(10)), 'status must be 1 to 40 characters with no leading or trailing space'),
     ('title 121', format('jsonb_build_object(''title'', %L)', repeat('t', 121)), 'title must be 1 to 120 characters with no leading or trailing space'),
     ('description 2001', format('jsonb_build_object(''description'', %L)', repeat('d', 2001)), 'description must be at most 2000 characters'),
     ('description number', '''{"description": 5}''::jsonb', 'description must be at most 2000 characters'),
@@ -730,6 +782,34 @@ begin
   if (select revision from public.features where id = pg_temp.id('feat_poly')) <> 3 then
     raise exception 'a patch inside the ceiling was refused';
   end if;
+end;
+$$;
+
+-- TRUNCATE removes rows without firing the row-level deletion audit, so the guard
+-- refuses it for the table owner too. Both routes are asserted: a direct truncate,
+-- and a truncate of the parent that cascades to features. Each must fail with the
+-- guard's own SQLSTATE and message. The owner is the strongest caller, so this is
+-- the case that matters.
+reset role;
+do $$
+declare
+  v_before bigint := (select count(*) from public.features);
+begin
+  perform pg_temp.expect('owner truncates features', 'truncate public.features',
+    '0A000', 'feature rows cannot be truncated; delete each feature so the deletion is audited');
+  perform pg_temp.expect('owner truncates layers cascade', 'truncate public.layers cascade',
+    '0A000', 'feature rows cannot be truncated; delete each feature so the deletion is audited');
+  if (select count(*) from public.features) <> v_before or v_before = 0 then
+    raise exception 'a refused truncate changed the feature count';
+  end if;
+end;
+$$;
+set local role authenticated;
+do $$
+begin
+  perform pg_temp.act_as('admin_a');
+  perform pg_temp.expect('authenticated truncates features', 'truncate public.features',
+    '42501', 'permission denied for table features');
 end;
 $$;
 

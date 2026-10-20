@@ -106,8 +106,30 @@ create trigger features_audit_deletion
   after delete on public.features
   for each row execute function app_private.record_feature_deletion();
 
+-- TRUNCATE fires no row-level DELETE trigger, so the deletion audit above would
+-- not see it. A truncate of features, or a truncate of layers with CASCADE that
+-- reaches features, would remove rows with no audit record. This statement-level
+-- trigger refuses both, for every role, the table owner included. The refusal
+-- names the way to remove a feature: one at a time, so each deletion is recorded.
+create function app_private.refuse_feature_truncate()
+returns trigger
+language plpgsql
+security invoker
+set search_path = ''
+as $$
+begin
+  raise exception 'feature rows cannot be truncated; delete each feature so the deletion is audited'
+    using errcode = 'feature_not_supported';
+end;
+$$;
+
+create trigger features_refuse_truncate
+  before truncate on public.features
+  for each statement execute function app_private.refuse_feature_truncate();
+
 revoke all on function app_private.reject_feature_audit_change(),
-  app_private.record_feature_deletion()
+  app_private.record_feature_deletion(),
+  app_private.refuse_feature_truncate()
   from public, anon, authenticated;
 
 -- ---------------------------------------------------------------------------
@@ -127,6 +149,23 @@ revoke insert, update, delete on table public.features from authenticated;
 -- row in its DETAIL, which would put feature content into a database log. The
 -- table constraints remain as a backstop.
 -- ---------------------------------------------------------------------------
+-- The characters Unicode classes as White_Space. btrim with the default set removes
+-- only spaces, so a title of a tab, a newline, or a non-breaking space passed. A
+-- value that is blank once these are removed is refused, and so is one with any of
+-- them at either end. Interior whitespace is kept.
+create function app_private.feature_whitespace()
+returns text
+language sql
+immutable
+security invoker
+set search_path = ''
+as $$
+  select chr(9) || chr(10) || chr(11) || chr(12) || chr(13) || chr(32) || chr(133)
+    || chr(160) || chr(5760)
+    || (select string_agg(chr(n), '' order by n) from generate_series(8192, 8202) as n)
+    || chr(8232) || chr(8233) || chr(8239) || chr(8287) || chr(12288)
+$$;
+
 create function app_private.check_feature_title(p_title text)
 returns void
 language plpgsql
@@ -135,7 +174,9 @@ security invoker
 set search_path = ''
 as $$
 begin
-  if p_title is null or p_title <> btrim(p_title) or char_length(p_title) not between 1 and 120 then
+  if p_title is null
+    or char_length(p_title) not between 1 and 120
+    or p_title <> btrim(p_title, app_private.feature_whitespace()) then
     raise exception 'title must be 1 to 120 characters with no leading or trailing space'
       using errcode = 'invalid_parameter_value';
   end if;
@@ -166,7 +207,8 @@ set search_path = ''
 as $$
 begin
   if p_status is not null
-    and (p_status <> btrim(p_status) or char_length(p_status) not between 1 and 40) then
+    and (char_length(p_status) not between 1 and 40
+      or p_status <> btrim(p_status, app_private.feature_whitespace())) then
     raise exception 'status must be 1 to 40 characters with no leading or trailing space'
       using errcode = 'invalid_parameter_value';
   end if;
@@ -698,7 +740,8 @@ $$;
 
 -- Grants. The helpers are reachable only through the functions above. The three
 -- RPCs are executable by authenticated and by nobody else.
-revoke all on function app_private.check_feature_title(text),
+revoke all on function app_private.feature_whitespace(),
+  app_private.check_feature_title(text),
   app_private.check_feature_description(text),
   app_private.check_feature_status(text),
   app_private.attribute_numbers_faithful(jsonb),

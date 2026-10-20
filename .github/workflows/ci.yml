@@ -66,6 +66,7 @@ jobs:
           psql -X -v ON_ERROR_STOP=1 -v VERBOSITY=verbose -f tests/sql/maps_layer_associations.sql
           psql -X -v ON_ERROR_STOP=1 -v VERBOSITY=verbose -f tests/sql/organization_invitations.sql
           psql -X -v ON_ERROR_STOP=1 -v VERBOSITY=verbose -f tests/sql/feature_storage.sql
+          psql -X -v ON_ERROR_STOP=1 -v VERBOSITY=verbose -f tests/sql/layer_feature_queries.sql
           bash tests/sql/organization_invitations_race.sh
 
   quality-security:

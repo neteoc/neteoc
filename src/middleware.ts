@@ -8,7 +8,8 @@ export const onRequest = defineMiddleware(async (context, next) => {
     protectedRoute ||
     path === '/login' ||
     path === '/login-sent' ||
-    path.startsWith('/auth/');
+    path.startsWith('/auth/') ||
+    path.startsWith('/api/');
 
   if (!authRoute) return next();
 

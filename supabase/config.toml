@@ -225,8 +225,14 @@ web3 = 30
 # secret = ""
 
 [auth.email]
-# Allow/disallow new user signups via email to your project. Keep false; see [auth].
-enable_signup = false
+# MUST stay true. This flag enables the email PROVIDER, not new-user signup.
+# Setting it false reports `external.email:false` at /auth/v1/settings and makes
+# every sign-in fail with `422 email_provider_disabled`, including for existing
+# invited users, which disables the only sign-in method this project has.
+# Invitation-only membership is enforced by `enable_signup = false` under
+# `[auth]`, which returns `422 signup_disabled` for an unknown address while
+# still issuing codes to existing users.
+enable_signup = true
 # If enabled, a user will be required to confirm any email change on both the old, and new email
 # addresses. If disabled, only the new email is required to confirm.
 double_confirm_changes = true

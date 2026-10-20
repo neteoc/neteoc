@@ -44,13 +44,23 @@ on `http://127.0.0.1:54324` receives every Auth email, so one-time codes can be
 read without a real mailbox. No email leaves the machine.
 
 The CLI's defaults are permissive, and this project overrides them deliberately.
-`enable_signup` is `false` under both `[auth]` and `[auth.email]` because
-membership is invitation-only. The Site URL and redirect allow list match the
-Worker preview origin, and the email OTP is eight digits with a 600-second
-expiry. Other defaults are inherited; `auto_expose_new_tables` matches the
-hosted default, so migrations must still revoke explicitly. The local keys
-printed by `supabase status` are for this stack only. Never copy them into
-`.dev.vars` or commit them.
+`enable_signup` is `false` under `[auth]` because membership is invitation-only:
+an unknown address gets `422 signup_disabled`, while an existing invited user
+still receives a code. Leave `enable_signup` under `[auth.email]` set to `true`.
+That flag enables the email provider rather than new-user signup, and turning it
+off fails every sign-in with `422 email_provider_disabled`, including for
+existing users, which would disable the only sign-in method this project has.
+The Site URL and redirect allow list match the Worker preview origin, and the
+email OTP is eight digits with a 600-second expiry. Other defaults are
+inherited; `auto_expose_new_tables` matches the hosted default, so migrations
+must still revoke explicitly.
+
+Treat the running stack as untrusted on a shared network. The CLI publishes
+Postgres, Studio, the API, and the mail catcher on every host interface, the
+database password is the static `postgres`, and the printed keys, including the
+service-role key, are well-known public demo values. They are for this stack
+only. Never copy them into `.dev.vars`, never commit them, and run
+`supabase stop` when you are not using the stack.
 
 ## Commit and pull request discipline
 

@@ -62,6 +62,17 @@ session refresh, sign-out, and invitation acceptance remain unverified. A
 verified NetEOC sender is needed before a pilot; the development project
 currently uses a temporary sender.
 
+Layer feature reads (#13) add `GET /api/v1/layers/{layerId}/features`, backed by
+`list_layer_features`. The read returns a bounded page ordered by a stable
+`(created_at, id)` cursor. Over-limit bounding boxes, page sizes, sorts, and
+cursors fail with explicit errors, never a silent truncation. A forbidden layer
+and a nonexistent layer return byte-identical empty pages, which the database
+test and the live PostgREST run both confirmed. On a synthetic 10,000-feature
+layer the planner uses the layer index rather than the geometry index. Two
+candidate indexes did not change the plan, so none was added. See
+[Layer feature reads](layer-feature-queries.md). NetEOC Dev has not received
+these migrations.
+
 The foundation's actionlint, TruffleHog tree and history scans, and CI passed at
 the previous checkpoint. The initial commit predates the Conventional Commit
 policy; future commits and PR titles are validated. Security scanning results

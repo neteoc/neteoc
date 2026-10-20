@@ -28,6 +28,8 @@ Read these documents in order:
     boundary and its authorization test.
 13. [Operator bootstrap](operator-bootstrap.md): the privileged, audited path
     for appointing the first platform admin and organization admin.
+14. [Layer feature reads](layer-feature-queries.md): the bounded viewport and
+    list endpoint, its stable cursor, limits, and index evidence.
 
 Keep substantive documentation here in Markdown. If PDFs become useful, put them
 in `docs/pdfs/` and link them from the relevant Markdown page. Do not copy

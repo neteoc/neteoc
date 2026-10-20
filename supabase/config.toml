@@ -257,6 +257,14 @@ otp_expiry = 600
 # admin_email = "admin@email.com"
 # sender_name = "Admin"
 
+# Sign-in code email. The CLI default is a link-only "Your sign-in link" message,
+# so the eight-digit code is absent and the link carries a consumable token that
+# link scanners would redeem. This template is the same code-only body that
+# docs/auth-setup.md sets for hosted projects. Keep the two in step.
+[auth.email.template.magic_link]
+subject = "Your NetEOC sign-in code"
+content_path = "./supabase/templates/magic_link.html"
+
 # Uncomment to customize email template
 # [auth.email.template.invite]
 # subject = "You have been invited"
@@ -283,9 +291,12 @@ max_frequency = "5s"
 # 4152127777 = "123456"
 
 # Configure logged in session timeouts.
-# [auth.sessions]
-# Force log out after the specified duration.
-# timebox = "24h"
+[auth.sessions]
+# Force log out after the specified duration, measured from sign-in. Matches the
+# seven-day maximum on session cookies in docs/auth-setup.md. The value is a Go
+# duration, which has no day unit, so seven days is written as 168 hours. "7d"
+# makes GoTrue fail to start.
+timebox = "168h"
 # Force log out if the user has been inactive longer than the specified duration.
 # inactivity_timeout = "8h"
 

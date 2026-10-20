@@ -74,6 +74,23 @@ try {
       `${route} must not be indexed`,
     );
   }
+  // Middleware refuses /api before any route runs, with the route's own 401 shape.
+  const api = await fetch(
+    `${origin}/api/v1/layers/00000000-0000-4000-8000-000000000001/features`,
+  );
+  assert(api.status === 401, '/api must refuse without a verified session');
+  assert(
+    api.headers.get('content-type') === 'application/json; charset=utf-8',
+    '/api refusal must be JSON',
+  );
+  assert(
+    api.headers.get('cache-control') === 'private, no-store',
+    '/api refusal must not be cached',
+  );
+  assert(
+    (await api.json()).error?.code === 'not_authenticated',
+    '/api refusal must name not_authenticated',
+  );
   const confirmPage = await fetch(`${origin}/auth/confirm`);
   assert(confirmPage.status === 200, 'confirmation form must render');
   const confirmHtml = await confirmPage.text();

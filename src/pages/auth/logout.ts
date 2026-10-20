@@ -1,5 +1,5 @@
 import type { APIRoute } from 'astro';
-import { clearSupabaseCookies } from '../../lib/supabase';
+import { clearSupabaseCookies } from '../../lib/session-cookies';
 
 export const POST: APIRoute = async ({
   request,

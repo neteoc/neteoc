@@ -185,7 +185,7 @@ begin
   begin
     set local role anon;
     perform public.list_layer_features(
-      'd3b2c1e0-4f60-4c7d-8e8f-9a0b1c2d3e01', -180, -90, 180, 90, 10, null, null, 258048);
+      'd3b2c1e0-4f60-4c7d-8e8f-9a0b1c2d3e01', null, null, null, null, 10, null, null, 258048);
     raise exception 'anonymous caller read a layer page';
   exception when insufficient_privilege then
     if sqlerrm <> 'permission denied for function list_layer_features' then
@@ -324,14 +324,14 @@ declare
   v_layer constant uuid := 'd3b2c1e0-4f60-4c7d-8e8f-9a0b1c2d3e01';
 begin
   begin
-    perform public.list_layer_features(v_layer, -180, -90, 180, 90, 0, null, null, 258048);
+    perform public.list_layer_features(v_layer, null, null, null, null, 0, null, null, 258048);
     raise exception 'limit 0 was accepted';
   exception when invalid_parameter_value then
     if sqlerrm <> 'limit must be between 1 and 200' then raise; end if;
   end;
 
   begin
-    perform public.list_layer_features(v_layer, -180, -90, 180, 90, 201, null, null, 258048);
+    perform public.list_layer_features(v_layer, null, null, null, null, 201, null, null, 258048);
     raise exception 'limit 201 was accepted';
   exception when invalid_parameter_value then
     if sqlerrm <> 'limit must be between 1 and 200' then raise; end if;
@@ -359,17 +359,17 @@ begin
   end;
 
   begin
-    perform public.list_layer_features(v_layer, -180, -90, 180, 90, 10, timestamptz '2026-10-01', null, 258048);
+    perform public.list_layer_features(v_layer, null, null, null, null, 10, timestamptz '2026-10-01', null, 258048);
     raise exception 'cursor with created_at and no id was accepted';
   exception when invalid_parameter_value then
     if sqlerrm <> 'cursor needs both created_at and id' then raise; end if;
   end;
 
   begin
-    perform public.list_layer_features(v_layer, -180, -90, 180, 90, 10, null, null, 0);
+    perform public.list_layer_features(v_layer, null, null, null, null, 10, null, null, 0);
     raise exception 'zero byte budget was accepted';
   exception when invalid_parameter_value then
-    if sqlerrm <> 'byte budget must be positive' then raise; end if;
+    if sqlerrm <> 'byte budget must be between 1 and 258048' then raise; end if;
   end;
 end;
 $$;
@@ -455,9 +455,9 @@ declare
 begin
   set local role authenticated;
   perform set_config('request.jwt.claim.sub', v_admin::text, true);
-  v_visible_empty := public.list_layer_features(v_empty_layer, -180, -90, 180, 90, 10, null, null, 258048);
+  v_visible_empty := public.list_layer_features(v_empty_layer, null, null, null, null, 10, null, null, 258048);
   perform set_config('request.jwt.claim.sub', v_member_b::text, true);
-  v_forbidden := public.list_layer_features(v_layer_a, -180, -90, 180, 90, 10, null, null, 258048);
+  v_forbidden := public.list_layer_features(v_layer_a, null, null, null, null, 10, null, null, 258048);
   reset role;
   if v_visible_empty is distinct from v_forbidden then
     raise exception 'a visible empty layer and a forbidden layer return different payloads';
@@ -484,6 +484,61 @@ begin
       null;
     end;
   end loop;
+end;
+$$;
+
+-- Direct RPC. list_layer_features is granted to authenticated, so it is a public API.
+-- These calls skip the route and run as the authenticated role with the claims PostgREST
+-- sets. Every refusal must match both its SQLSTATE and the message the function raises.
+-- Every accepted case is a boundary pair with its refused neighbour, so a bound moved
+-- in either direction fails here.
+do $$
+declare
+  v_layer constant text := 'd3b2c1e0-4f60-4c7d-8e8f-9a0b1c2d3e01';
+  v_admin constant text := 'b1f0a9c3-2d4e-4a5b-8c6d-7e8f9a0b1c01';
+  c record;
+  v_accepted boolean;
+  v_checked integer := 0;
+  v_state text;
+  v_msg text;
+begin
+  set local role authenticated;
+  perform set_config('request.jwt.claim.sub', v_admin, true);
+  for c in select * from (values
+    ('budget 258049, one over the ceiling', 'null,null,null,null,10,null,null,258049', '22023', 'byte budget must be between 1 and 258048'),
+    ('budget 2147483647, the route bypass', 'null,null,null,null,10,null,null,2147483647', '22023', 'byte budget must be between 1 and 258048'),
+    ('budget 258048, the ceiling itself', 'null,null,null,null,10,null,null,258048', null, null),
+    ('budget 1, the floor', 'null,null,null,null,10,null,null,1', null, null),
+    ('budget 0', 'null,null,null,null,10,null,null,0', '22023', 'byte budget must be between 1 and 258048'),
+    ('limit 201', 'null,null,null,null,201,null,null,258048', '22023', 'limit must be between 1 and 200'),
+    ('limit 200, the ceiling itself', 'null,null,null,null,200,null,null,258048', null, null),
+    ('limit null', 'null,null,null,null,null,null,null,258048', '22023', 'limit must be between 1 and 200'),
+    ('longitude span 90.0001', '0,39,90.0001,40,10,null,null,258048', '22023', 'bounding box may span at most 90 degrees in each direction'),
+    ('longitude span 90, the ceiling itself', '0,39,90,40,10,null,null,258048', null, null),
+    ('latitude span 90.0001', '-105,-45,-104,45.0001,10,null,null,258048', '22023', 'bounding box may span at most 90 degrees in each direction'),
+    ('latitude span 90, the ceiling itself', '-105,-45,-104,45,10,null,null,258048', null, null),
+    ('half-specified box', '-105,39,null,null,10,null,null,258048', '22023', 'bounding box needs all four edges or none'),
+    ('inverted box', '-104,39,-105,40,10,null,null,258048', '22023', 'bounding box must be WGS84 with min <= max'),
+    ('list form, no box', 'null,null,null,null,10,null,null,258048', null, null)
+  ) as t(label, args, expect_state, expect_message)
+  loop
+    v_accepted := false;
+    v_checked := v_checked + 1;
+    begin
+      execute format('select public.list_layer_features(%L, %s)', v_layer, c.args);
+      v_accepted := true;
+    exception when others then
+      get stacked diagnostics v_state = returned_sqlstate, v_msg = message_text;
+      if c.expect_state is null or v_state <> c.expect_state or v_msg <> c.expect_message then
+        raise exception 'refused by another cause: % (SQLSTATE %, message %)', c.label, v_state, v_msg;
+      end if;
+    end;
+    if v_accepted and c.expect_state is not null then
+      raise exception 'accepted, expected refusal: %', c.label;
+    end if;
+  end loop;
+  reset role;
+  raise notice 'direct RPC: % cases checked, all as authenticated', v_checked;
 end;
 $$;
 

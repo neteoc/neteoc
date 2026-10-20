@@ -68,8 +68,9 @@ Layer feature reads (#13) add `GET /api/v1/layers/{layerId}/features`, backed by
 cursors fail with explicit errors, never a silent truncation. A forbidden layer
 and a nonexistent layer return byte-identical empty pages, which the database
 test and the live PostgREST run both confirmed. On a synthetic 10,000-feature
-layer the planner uses the layer index rather than the geometry index. Two
-candidate indexes did not change the plan, so none was added. See
+layer the planner uses the layer index rather than the geometry index. A btree
+on `(layer_id, created_at, id)` speeds populated viewports and slows empty ones,
+so no index is added while that trade-off awaits a decision. See
 [Layer feature reads](layer-feature-queries.md). NetEOC Dev has not received
 these migrations.
 

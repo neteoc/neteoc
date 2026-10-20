@@ -1,4 +1,5 @@
 import { defineMiddleware } from 'astro:middleware';
+import { isPublicApiPath } from './lib/public-api';
 import { createSupabaseClient } from './lib/supabase';
 
 // Verified claims, not a cookie's presence, decide identity. Any failure,
@@ -59,10 +60,9 @@ export const onRequest = defineMiddleware(async (context, next) => {
     return response;
   }
 
-  // Every /api route requires a verified session here, so a route that forgets
-  // its own check still returns no data. A public API read, when one exists,
-  // needs an explicit exception with its own tests.
-  if (apiRoute) {
+  // Every /api route requires a verified session unless it is on the explicit
+  // public allowlist, so a route that forgets its own check still returns no data.
+  if (apiRoute && !isPublicApiPath(path)) {
     if (!(await hasVerifiedClaims(context.locals.supabase)))
       return finish(unauthorizedApi());
   }

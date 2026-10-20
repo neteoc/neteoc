@@ -148,6 +148,22 @@ describe('middleware protected pages', () => {
   });
 });
 
+describe('public API allowlist', () => {
+  test('starts empty, so every /api path is refused without a session', async () => {
+    const { PUBLIC_API_PREFIXES, isPublicApiPath } =
+      await import('../src/lib/public-api');
+    expect(PUBLIC_API_PREFIXES).toEqual([]);
+    expect(isPublicApiPath('/api/v1/layers/x/features')).toBe(false);
+    expect(isPublicApiPath('/api/public')).toBe(false);
+    supabase = null;
+    const { response, routeCalls: calls } = await run(
+      '/api/v1/layers/00000000-0000-4000-8000-000000000001/features',
+    );
+    expect(response.status).toBe(401);
+    expect(calls).toBe(0);
+  });
+});
+
 describe('middleware scope', () => {
   test('leaves public pages alone', async () => {
     supabase = null;

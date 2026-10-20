@@ -33,9 +33,45 @@ grant checks in the PR gate without production credentials. The same SQL test
 was run against NetEOC Dev to cover its actual Auth schema. Supabase security
 and performance advisors found no new table findings.
 
-The next tenant changes must add an audited operator bootstrap, organization
-admin membership management, single-use invitations, revocation and last-admin
-protection, and direct negative tests for each mutation. Until bootstrap is
-implemented, the tables intentionally have no application write path. Future
-migrations must keep RLS and negative authorization tests alongside new exposed
-tables.
+The next tenant changes must add organization admin membership management,
+last-admin protection, and direct negative tests for each mutation. Invitations
+are described below. Until bootstrap is implemented, the tables intentionally
+have no application write path. Future migrations must keep RLS and negative
+authorization tests alongside new exposed tables.
+
+## Single-use invitations
+
+[`20261020162500_organization_invitations.sql`](../supabase/migrations/20261020162500_organization_invitations.sql)
+adds `organization_invitations`. Each row binds one normalized email to one
+organization and one role, with an expiry of at most 14 days. Issuance returns
+the plaintext token once. The table stores only its SHA-256 digest, and no
+application role can select that column. Application roles get no direct writes.
+Three security definer functions carry the logic, each with an explicit check
+and a pinned search path:
+
+- `issue_organization_invitation` requires a current admin of the organization.
+- `revoke_organization_invitation` requires an admin of the invitation's
+  organization. A non-admin gets the same answer for an unknown ID.
+- `accept_organization_invitation` requires a signed-in user with a confirmed
+  email equal to the invitation's email. It locks the invitation row, refuses a
+  used, revoked, or expired invitation, and writes the membership.
+
+Each issuance, revocation, and consumption appends an event to
+`app_private.invitation_audit_events`. The event holds the IDs and the action
+only. It has no email address and no token. Triggers keep the audit log
+append-only, and they prevent a row that has been consumed or revoked from
+changing again.
+
+The token has 244 random bits, from two `gen_random_uuid()` values, and is
+stored only as a SHA-256 digest. A salt or keyed hash would add little against a
+244-bit random value, and a server-side key would have to live in the database
+for acceptance to work. A stolen row therefore holds no usable credential, and
+accepting still requires the plaintext and a signed-in account for that exact
+address. Supabase request logs can record function arguments, so the application
+must not log the RPC body for `accept_organization_invitation`.
+
+`tests/sql/organization_invitations.sql` covers the grants and pins, constraint
+violations, each role's issuance and revocation, wrong-tenant and wrong-email
+denials, replay, expiry, revocation, an unconfirmed account, and audit
+immutability. `tests/sql/organization_invitations_race.sh` runs two committed
+sessions against one invitation and checks that exactly one succeeds.

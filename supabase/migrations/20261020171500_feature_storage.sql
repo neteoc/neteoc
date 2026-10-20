@@ -72,27 +72,34 @@ create table public.features (
   -- An empty geometry has NULL bounds, and a NULL bound passes a CHECK. Reject it
   -- explicitly.
   constraint features_geom_not_empty check (not extensions.st_isempty(geom)),
+  -- ST_IsValid is the expensive check. PostgreSQL evaluates CHECK constraints in
+  -- name order and stops at the first failure. The vertex limit below must sort
+  -- before this name, so an oversized input is refused before the validity test
+  -- runs. Renaming either constraint can reintroduce that cost. The ordering
+  -- test in tests/sql/feature_storage.sql fails if it happens.
   constraint features_geom_valid check (extensions.st_isvalid(geom)),
   -- Every vertex lies within the bounds, because the bounding box covers them
   -- all. NaN compares above 180 and 90, so it fails the upper bounds. A swapped
-  -- pair fails when its longitude is outside -90..90, as for most of the
-  -- Americas. A swap of a point with longitude inside -90..90 is still a valid
-  -- coordinate, such as Paris written as latitude then longitude. Only the
-  -- API's GeoJSON order can prevent that.
+  -- pair fails only when its true longitude is outside -90..90, such as Denver
+  -- (-104.99 39.74) swapped. A swapped pair whose true longitude lies within
+  -- -90..90 is a valid coordinate and passes, as with Atlanta (-84.4 33.7) or
+  -- Paris (2.35 48.85). Only the API's GeoJSON order check can stop those.
   constraint features_geom_lon_lat_range check (
     extensions.st_xmin(geom) >= -180 and extensions.st_xmax(geom) <= 180
     and extensions.st_ymin(geom) >= -90 and extensions.st_ymax(geom) <= 90
   ),
   -- A 2D vertex is 16 bytes of EWKB, so 2000 vertices stay near 32 KB. This
-  -- bound also limits the geometry payload.
-  constraint features_geom_vertex_limit check (extensions.st_npoints(geom) <= 2000)
+  -- bound also limits the geometry payload. The name sorts before
+  -- features_geom_valid. Do not rename it to a later name.
+  constraint features_geom_npoints_limit check (extensions.st_npoints(geom) <= 2000)
 );
 
 create index features_organization_id_idx on public.features (organization_id);
 create index features_layer_id_idx on public.features (layer_id);
--- A GiST index serves bounding-box queries (geom && envelope). Viewport reads
--- filter by layer and bounding box, so the planner can combine this index with
--- the layer_id index.
+-- A GiST index makes bounding-box queries (geom && envelope) usable by the
+-- planner. The test shows it is used with sequential scans disabled, on a
+-- four-row fixture. It does not show the planner picks it for real data. #13
+-- measures a real layer and may need a composite or btree_gist index.
 create index features_geom_gist_idx on public.features using gist (geom);
 
 alter table public.features enable row level security;

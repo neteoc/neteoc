@@ -178,9 +178,13 @@ cost, and that difference is intended, because the caller can read the layer.
 This is a measurement on one host, not a proof of constant time. Absolute
 figures vary by host and load. The ratio before and after is the evidence.
 
-The probe's effect is latency, which the SQL test cannot observe, so removing
-the probe leaves the SQL test passing. The measurement above is the check for
-it.
+The SQL suite cannot observe latency. It guards the probe's presence with a
+catalog assertion on the function source, a structural proxy that fails if the
+probe statement is removed or written after the features read. It does not prove
+the probe runs first at runtime, or that it is cheap. The latency measurement
+above is the real evidence, and the assertion is brittle under refactoring by
+design: a failure there means the function changed shape and the timing claim
+needs a new measurement.
 
 ## Access implications
 

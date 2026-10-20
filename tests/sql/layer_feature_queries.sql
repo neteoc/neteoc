@@ -66,6 +66,7 @@ do $$
 declare
   fn constant regprocedure :=
     'public.list_layer_features(uuid,double precision,double precision,double precision,double precision,integer,timestamptz,uuid,integer)'::regprocedure;
+  v_src text;
 begin
   if (select prosecdef from pg_proc where oid = fn) then
     raise exception 'list_layer_features is security definer; RLS would be bypassed';
@@ -92,6 +93,23 @@ begin
       and a.privilege_type = 'EXECUTE'
   ) then
     raise exception 'PUBLIC can execute list_layer_features';
+  end if;
+
+  -- STRUCTURAL PROXY, not a behavioural test. The layer probe's effect is latency, and
+  -- this suite cannot observe latency. The real evidence is the measurement in
+  -- tests/perf/layer_viewport_plan.sql and the table in docs/layer-feature-queries.md.
+  -- This check only guards that the probe statement is present, and written before the
+  -- features read in the function body. It does not prove that the probe runs first at
+  -- runtime, or that it is cheap. A refactor that keeps this text and changes the control
+  -- flow would still pass. If you restructure the function, update this assertion with
+  -- the probe, and do not treat a failure here as a regression in the authorization.
+  select prosrc into v_src from pg_proc where oid = fn;
+  if position('if not exists (select 1 from public.layers as l where l.id = p_layer_id) then' in v_src) = 0 then
+    raise exception 'list_layer_features no longer probes public.layers; the timing oracle is open';
+  end if;
+  if position('if not exists (select 1 from public.layers as l where l.id = p_layer_id) then' in v_src)
+    > position('from public.features as f' in v_src) then
+    raise exception 'the layer probe is written after the features read';
   end if;
 end;
 $$;
@@ -423,8 +441,9 @@ $$;
 
 -- Timing oracle. A visible empty layer and a forbidden or nonexistent layer must return
 -- the same payload, so the empty page is one shape whichever branch produced it. The
--- byte comparison guards the shape. The probe's effect is latency, which this test cannot
--- observe, so removing the probe leaves it passing. tests/perf measures the latency.
+-- byte comparison guards the shape. The probe's presence is guarded by the catalog
+-- assertion at the top of this file, a structural proxy. Its latency effect is measured
+-- in tests/perf, because this suite cannot observe timing.
 do $$
 declare
   v_admin constant uuid := 'b1f0a9c3-2d4e-4a5b-8c6d-7e8f9a0b1c01';

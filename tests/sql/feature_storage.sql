@@ -72,33 +72,22 @@ begin
     raise exception 'anon holds a privilege on features';
   end if;
 
-  if not has_table_privilege('authenticated', 'public.features', 'select')
-    or not has_table_privilege('authenticated', 'public.features', 'delete') then
-    raise exception 'authenticated lacks select or delete on features';
+  -- Application roles read features and write none. Every write goes through
+  -- create_feature, update_feature, or delete_feature (#14), which check the
+  -- expected revision. A table or column grant would let a client skip that check.
+  -- tests/sql/feature_edits.sql exercises the functions.
+  if not has_table_privilege('authenticated', 'public.features', 'select') then
+    raise exception 'authenticated lacks select on features';
   end if;
-  -- Writes are column-level. Table-level insert or update would expose the
-  -- revision, actor, and identity columns.
-  if has_table_privilege('authenticated', 'public.features', 'insert, update, truncate, references, trigger') then
-    raise exception 'authenticated holds a table-level write privilege on features';
+  if has_table_privilege('authenticated', 'public.features', 'insert, update, delete, truncate, references, trigger')
+    or has_any_column_privilege('authenticated', 'public.features', 'insert, update, references') then
+    raise exception 'authenticated holds a write privilege on features';
   end if;
-  foreach col in array array['layer_id', 'organization_id', 'geom', 'title', 'description', 'status', 'properties'] loop
-    if not has_column_privilege('authenticated', 'public.features', col, 'insert') then
-      raise exception 'authenticated cannot insert %', col;
-    end if;
-  end loop;
-  foreach col in array array['geom', 'title', 'description', 'status', 'properties'] loop
-    if not has_column_privilege('authenticated', 'public.features', col, 'update') then
-      raise exception 'authenticated cannot update %', col;
-    end if;
-  end loop;
-  foreach col in array array['id', 'layer_id', 'organization_id', 'revision', 'created_by', 'created_at', 'updated_by', 'updated_at'] loop
-    if has_column_privilege('authenticated', 'public.features', col, 'update') then
-      raise exception 'authenticated can update %', col;
-    end if;
-  end loop;
-  foreach col in array array['id', 'revision', 'created_by', 'created_at', 'updated_by', 'updated_at'] loop
-    if has_column_privilege('authenticated', 'public.features', col, 'insert') then
-      raise exception 'authenticated can insert %', col;
+  foreach col in array array['id', 'layer_id', 'organization_id', 'geom', 'title', 'description', 'status', 'properties',
+                              'revision', 'created_by', 'created_at', 'updated_by', 'updated_at'] loop
+    if has_column_privilege('authenticated', 'public.features', col, 'insert')
+      or has_column_privilege('authenticated', 'public.features', col, 'update') then
+      raise exception 'authenticated can write %', col;
     end if;
   end loop;
 
@@ -400,16 +389,13 @@ begin
 end;
 $$;
 
--- Editor in organization A reads its features and writes within its
--- organization. Cross-tenant reads and writes are denied, and column grants
--- keep identity, revision, and actor fields out of reach.
+-- Reads follow membership. A member reads its organization's features and none
+-- of another's. Direct writes are refused by privilege for every role, including
+-- an editor of the row's own organization: the row policies for insert, update,
+-- and delete remain, but no role holds the grant that would reach them.
 select set_config('request.jwt.claim.sub', 'c4b1a0d2-7e3f-4a10-9b21-5d6e7f809a02', true);
 set local role authenticated;
 do $$
-declare
-  affected integer;
-  v_id uuid;
-  v_constraint text;
 begin
   if (select count(*) from public.features) <> 4
     or (select count(*) from public.features where organization_id = 'd5c2b1e3-8f40-4b21-8c32-6e7f8091ab02') <> 0 then
@@ -418,148 +404,47 @@ begin
 
   begin
     insert into public.features (layer_id, organization_id, geom, title)
-      values ('e6d3c2f4-9051-4c32-9d43-7f8091abc003', 'd5c2b1e3-8f40-4b21-8c32-6e7f8091ab02',
-              'SRID=4326;POINT(2.35 48.85)'::public.wgs84_geometry, 'Cross-tenant insert');
-    raise exception 'editor A inserted a feature into organization B';
-  exception when insufficient_privilege then null;
-  end;
-  begin
-    insert into public.features (layer_id, organization_id, geom, title)
-      values ('e6d3c2f4-9051-4c32-9d43-7f8091abc003', 'd5c2b1e3-8f40-4b21-8c32-6e7f8091ab01',
-              'SRID=4326;POINT(2.35 48.85)'::public.wgs84_geometry, 'Organization A row, B layer');
-    raise exception 'editor A attached an organization B layer';
-  exception when foreign_key_violation then
-    get stacked diagnostics v_constraint = constraint_name;
-    if v_constraint is distinct from 'features_layer_organization_fkey' then
-      raise exception 'foreign layer refused by % instead of features_layer_organization_fkey', v_constraint;
-    end if;
-  end;
-
-  begin
-    insert into public.features (layer_id, organization_id, geom, title)
       values ('e6d3c2f4-9051-4c32-9d43-7f8091abc001', 'd5c2b1e3-8f40-4b21-8c32-6e7f8091ab01',
-              'SRID=4326;POINT Z(-104.99 39.74 1600)'::public.wgs84_geometry, '3D from API');
-    raise exception 'editor A stored a 3D point';
-  exception when check_violation then
-    get stacked diagnostics v_constraint = constraint_name;
-    if v_constraint is distinct from 'features_geom_2d' then
-      raise exception '3D point refused by % instead of features_geom_2d', v_constraint;
-    end if;
-  end;
-
-  insert into public.features (layer_id, organization_id, geom, title, properties)
-    values ('e6d3c2f4-9051-4c32-9d43-7f8091abc001', 'd5c2b1e3-8f40-4b21-8c32-6e7f8091ab01',
-            'SRID=4326;POINT(-104.97 39.73)'::public.wgs84_geometry, 'Editor point', '{"status_note": "ok"}')
-    returning id into v_id;
-  if (select created_by from public.features where id = v_id) <> 'c4b1a0d2-7e3f-4a10-9b21-5d6e7f809a02' then
-    raise exception 'editor insert did not record the editor as actor';
-  end if;
-
-  update public.features set title = 'Point A edited by editor', description = 'Synthetic note'
-    where id = 'f7e4d3c5-a162-4d43-8e54-8091abcd0001';
-  get diagnostics affected = row_count;
-  if affected <> 1 then raise exception 'editor could not edit a same-organization feature'; end if;
-
-  update public.features set geom = 'SRID=4326;POLYGON((-105 39.5,-104.5 39.5,-104.5 39.95,-105 39.9,-105 39.5))'::public.wgs84_geometry
-    where id = 'f7e4d3c5-a162-4d43-8e54-8091abcd0003';
-  get diagnostics affected = row_count;
-  if affected <> 1 then raise exception 'editor could not reshape a same-organization polygon'; end if;
-  begin
-    update public.features set geom = 'SRID=4326;POLYGON((-105 39.5,-104.5 39.9,-104.5 39.5,-105 39.9,-105 39.5))'::public.wgs84_geometry
-      where id = 'f7e4d3c5-a162-4d43-8e54-8091abcd0003';
-    raise exception 'editor reshaped a polygon into a self-intersecting one';
-  exception when check_violation then
-    get stacked diagnostics v_constraint = constraint_name;
-    if v_constraint is distinct from 'features_geom_valid' then
-      raise exception 'self-intersecting reshape refused by % instead of features_geom_valid', v_constraint;
-    end if;
-  end;
-
-  update public.features set title = 'cross-tenant rename' where id = 'f7e4d3c5-a162-4d43-8e54-8091abcd0004';
-  get diagnostics affected = row_count;
-  if affected <> 0 then raise exception 'editor A updated organization B feature'; end if;
-  delete from public.features where id = 'f7e4d3c5-a162-4d43-8e54-8091abcd0004';
-  get diagnostics affected = row_count;
-  if affected <> 0 then raise exception 'editor A deleted organization B feature'; end if;
-
-  begin
-    update public.features set revision = 50 where id = 'f7e4d3c5-a162-4d43-8e54-8091abcd0001';
-    raise exception 'editor set a revision by hand';
-  exception when insufficient_privilege then null;
+              'SRID=4326;POINT(-104.97 39.73)'::public.wgs84_geometry, 'Editor point');
+    raise exception 'editor A inserted a feature directly';
+  exception when insufficient_privilege then
+    if sqlerrm <> 'permission denied for table features' then raise; end if;
   end;
   begin
-    update public.features set organization_id = 'd5c2b1e3-8f40-4b21-8c32-6e7f8091ab02'
-      where id = 'f7e4d3c5-a162-4d43-8e54-8091abcd0001';
-    raise exception 'editor moved a feature to another organization';
-  exception when insufficient_privilege then null;
+    update public.features set title = 'direct edit' where id = 'f7e4d3c5-a162-4d43-8e54-8091abcd0001';
+    raise exception 'editor A updated a feature directly';
+  exception when insufficient_privilege then
+    if sqlerrm <> 'permission denied for table features' then raise; end if;
   end;
   begin
-    update public.features set created_by = 'c4b1a0d2-7e3f-4a10-9b21-5d6e7f809a01'
-      where id = 'f7e4d3c5-a162-4d43-8e54-8091abcd0001';
-    raise exception 'editor rewrote the creating actor';
-  exception when insufficient_privilege then null;
+    delete from public.features where id = 'f7e4d3c5-a162-4d43-8e54-8091abcd0001';
+    raise exception 'editor A deleted a feature directly';
+  exception when insufficient_privilege then
+    if sqlerrm <> 'permission denied for table features' then raise; end if;
   end;
-
-  delete from public.features where id = v_id;
-  get diagnostics affected = row_count;
-  if affected <> 1 then raise exception 'editor could not delete a same-organization feature'; end if;
 end;
 $$;
 
--- Viewer in organization A reads its features and writes nothing.
+-- Viewer in organization A reads its features.
 select set_config('request.jwt.claim.sub', 'c4b1a0d2-7e3f-4a10-9b21-5d6e7f809a03', true);
 set local role authenticated;
 do $$
-declare
-  affected integer;
 begin
   if (select count(*) from public.features where organization_id = 'd5c2b1e3-8f40-4b21-8c32-6e7f8091ab01') <> 4 then
     raise exception 'viewer could not read organization A features';
   end if;
-
-  begin
-    insert into public.features (layer_id, organization_id, geom, title)
-      values ('e6d3c2f4-9051-4c32-9d43-7f8091abc001', 'd5c2b1e3-8f40-4b21-8c32-6e7f8091ab01',
-              'SRID=4326;POINT(-104.99 39.74)'::public.wgs84_geometry, 'Viewer feature');
-    raise exception 'viewer inserted a feature';
-  exception when insufficient_privilege then null;
-  end;
-
-  update public.features set title = 'viewer rename' where id = 'f7e4d3c5-a162-4d43-8e54-8091abcd0001';
-  get diagnostics affected = row_count;
-  if affected <> 0 then raise exception 'viewer updated a feature'; end if;
-  delete from public.features where id = 'f7e4d3c5-a162-4d43-8e54-8091abcd0001';
-  get diagnostics affected = row_count;
-  if affected <> 0 then raise exception 'viewer deleted a feature'; end if;
 end;
 $$;
 
--- Editor in organization B sees only organization B and cannot touch A.
+-- Editor in organization B sees only organization B.
 select set_config('request.jwt.claim.sub', 'c4b1a0d2-7e3f-4a10-9b21-5d6e7f809a04', true);
 set local role authenticated;
 do $$
-declare
-  affected integer;
 begin
   if (select count(*) from public.features) <> 1
     or (select count(*) from public.features where organization_id = 'd5c2b1e3-8f40-4b21-8c32-6e7f8091ab01') <> 0 then
     raise exception 'organization B editor reads organization A features';
   end if;
-
-  update public.features set title = 'cross-tenant edit' where id = 'f7e4d3c5-a162-4d43-8e54-8091abcd0001';
-  get diagnostics affected = row_count;
-  if affected <> 0 then raise exception 'organization B editor updated organization A feature'; end if;
-  delete from public.features where id = 'f7e4d3c5-a162-4d43-8e54-8091abcd0001';
-  get diagnostics affected = row_count;
-  if affected <> 0 then raise exception 'organization B editor deleted organization A feature'; end if;
-
-  begin
-    insert into public.features (layer_id, organization_id, geom, title)
-      values ('e6d3c2f4-9051-4c32-9d43-7f8091abc001', 'd5c2b1e3-8f40-4b21-8c32-6e7f8091ab01',
-              'SRID=4326;POINT(-104.99 39.74)'::public.wgs84_geometry, 'Cross-tenant insert');
-    raise exception 'organization B editor inserted into organization A';
-  exception when insufficient_privilege then null;
-  end;
 end;
 $$;
 
@@ -658,5 +543,97 @@ begin
   end loop;
 end;
 $$;
+
+-- Row policies are a second barrier behind the grants. The grants are absent by
+-- design: every write goes through the three RPCs, which carry their own checks
+-- (see feature_edits.sql). These policies must still refuse on their own, so this
+-- block restores the write grants for the rest of this transaction only. That is
+-- not a loosening. The grants are undone by the rollback at the end of this file,
+-- no migration grants them, and the catalog assertions above run before this point.
+reset role;
+grant insert (layer_id, organization_id, geom, title, description, status, properties)
+  on public.features to authenticated;
+grant update (geom, title, description, status, properties) on public.features to authenticated;
+grant delete on public.features to authenticated;
+
+do $$
+begin
+  if (select count(*) from pg_policies
+      where schemaname = 'public' and tablename = 'features'
+        and policyname in ('features_insert_editor', 'features_update_editor', 'features_delete_editor')) <> 3 then
+    raise exception 'an editor write policy on features is missing';
+  end if;
+end;
+$$;
+
+-- Viewer in organization A: the policies refuse every write, and the refusals say
+-- which rule refused them. An update or delete the policy filters out matches zero
+-- rows and raises nothing, so the row count is the assertion there.
+select set_config('request.jwt.claim.sub', 'c4b1a0d2-7e3f-4a10-9b21-5d6e7f809a03', true);
+set local role authenticated;
+do $$
+declare
+  affected integer;
+begin
+  begin
+    insert into public.features (layer_id, organization_id, geom, title)
+      values ('e6d3c2f4-9051-4c32-9d43-7f8091abc001', 'd5c2b1e3-8f40-4b21-8c32-6e7f8091ab01',
+              'SRID=4326;POINT(-104.99 39.74)'::public.wgs84_geometry, 'Viewer feature');
+    raise exception 'viewer inserted through the policy';
+  exception when insufficient_privilege then
+    if sqlerrm <> 'new row violates row-level security policy for table "features"' then raise; end if;
+  end;
+
+  update public.features set title = 'viewer rename' where id = 'f7e4d3c5-a162-4d43-8e54-8091abcd0001';
+  get diagnostics affected = row_count;
+  if affected <> 0 then raise exception 'viewer updated a feature through the policy'; end if;
+
+  delete from public.features where id = 'f7e4d3c5-a162-4d43-8e54-8091abcd0001';
+  get diagnostics affected = row_count;
+  if affected <> 0 then raise exception 'viewer deleted a feature through the policy'; end if;
+end;
+$$;
+
+-- Editor in organization B against organization A: the same policies, from the
+-- other side of the tenant boundary.
+select set_config('request.jwt.claim.sub', 'c4b1a0d2-7e3f-4a10-9b21-5d6e7f809a04', true);
+set local role authenticated;
+do $$
+declare
+  affected integer;
+begin
+  update public.features set title = 'cross-tenant edit' where id = 'f7e4d3c5-a162-4d43-8e54-8091abcd0001';
+  get diagnostics affected = row_count;
+  if affected <> 0 then raise exception 'editor B updated organization A through the policy'; end if;
+
+  delete from public.features where id = 'f7e4d3c5-a162-4d43-8e54-8091abcd0001';
+  get diagnostics affected = row_count;
+  if affected <> 0 then raise exception 'editor B deleted organization A through the policy'; end if;
+
+  begin
+    insert into public.features (layer_id, organization_id, geom, title)
+      values ('e6d3c2f4-9051-4c32-9d43-7f8091abc001', 'd5c2b1e3-8f40-4b21-8c32-6e7f8091ab01',
+              'SRID=4326;POINT(-104.99 39.74)'::public.wgs84_geometry, 'Cross-tenant insert');
+    raise exception 'editor B inserted into organization A through the policy';
+  exception when insufficient_privilege then
+    if sqlerrm <> 'new row violates row-level security policy for table "features"' then raise; end if;
+  end;
+end;
+$$;
+
+-- An editor of the organization can still write through the policies, so the
+-- refusals above are caused by the role, not by the grant alone.
+select set_config('request.jwt.claim.sub', 'c4b1a0d2-7e3f-4a10-9b21-5d6e7f809a02', true);
+set local role authenticated;
+do $$
+declare
+  affected integer;
+begin
+  update public.features set title = 'Policy editor' where id = 'f7e4d3c5-a162-4d43-8e54-8091abcd0001';
+  get diagnostics affected = row_count;
+  if affected <> 1 then raise exception 'editor A could not update through the policy'; end if;
+end;
+$$;
+reset role;
 
 rollback;

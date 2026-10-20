@@ -32,6 +32,8 @@ Read these documents in order:
     list endpoint, its stable cursor, limits, and index evidence.
 15. [Staging deployment](deployment.md): merge release path, environment setup,
     hosted checks, and recovery.
+16. [Feature writes](feature-writes.md): the revision-checked create, update,
+    and delete functions, their error contract, and attribute number rules.
 
 Keep substantive documentation here in Markdown. If PDFs become useful, put them
 in `docs/pdfs/` and link them from the relevant Markdown page. Do not copy

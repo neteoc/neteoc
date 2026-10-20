@@ -74,11 +74,16 @@ the cookies stays usable until the session timebox ends. Server-side global
 sign-out would end sessions on every device and is a product decision.
 
 `[auth.sessions] timebox` is set to `168h`, a Go duration (seven days; Go has no
-day unit). GoTrue refuses a refresh once a session's `not_after` has passed. On
-the local stack, the timebox reaches the GoTrue process, but new sessions are
-created with `not_after` NULL, so the timebox is not applied yet. Until that is
-resolved, the seven-day session bound is not enforced locally, and the hosted
-dashboard setting must be verified separately rather than assumed.
+day unit). GoTrue applies it at refresh time: a session whose `created_at` is
+more than the timebox in the past cannot refresh, even though its cookie is
+present. `not_after` stays NULL on normal sessions and is a separate field,
+which GoTrue also enforces when set. Local test
+`a session created 169 hours ago cannot refresh; one created 167 hours ago can`
+proves the boundary and fails when the timebox is raised to 336 hours.
+Supabase's documentation describes the timebox as enforced lazily at the next
+refresh, with the effective lifetime equal to the timebox plus the JWT expiry.
+Whether the hosted timebox setting is available on every plan is unverified;
+check it in the dashboard for each connected project.
 
 The end-to-end suite asserts the `Set-Cookie` attributes on real responses. It
 does not depend on browser storage behavior. Current Chrome and Firefox accept

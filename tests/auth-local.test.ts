@@ -508,19 +508,37 @@ describe.skipIf(!enabled)('email code sign-in against local Supabase', () => {
     expect(newAccess).not.toBe(oldAccess);
   }, 180_000);
 
-  test('the session timebox is 168 hours from sign-in, as configured', async () => {
-    await signIn();
+  // GoTrue applies the timebox at refresh time: a session whose created_at is more
+  // than the configured timebox in the past cannot refresh. not_after stays NULL,
+  // so the test asserts the refresh outcome, not that field. Backdating created_at
+  // moves the boundary without waiting a week.
+  test('a session created 169 hours ago cannot refresh; one created 167 hours ago can', async () => {
     const id = userId(KNOWN);
-    const lifetime = Number(
-      sql(
-        `select extract(epoch from (not_after - created_at))::int from auth.sessions where user_id = '${id}' order by created_at desc limit 1`,
-      ),
+    const tooOld = await signIn();
+    sql(
+      `update auth.sessions set created_at = now() - interval '169 hours' where id = (select id from auth.sessions where user_id = '${id}' order by created_at desc limit 1)`,
     );
-    expect(lifetime).toBe(604800);
-  }, 180_000);
+    expireSessionLocally(tooOld);
+    const refused = await protectedStatus(tooOld);
+    expect(refused.status).toBe(302);
+    expect(location(refused)).toBe('/login');
+    const live = sessionSetCookies(refused).filter(
+      (raw) => !/Max-Age=0|Expires=Thu, 01 Jan 1970/.test(raw),
+    );
+    expect(live).toEqual([]);
 
-  // Sets not_after by hand, so it proves GoTrue enforces a passed timebox, not
-  // that the timebox is applied. The 'timebox ... as configured' test covers that.
+    const withinTimebox = await signIn();
+    sql(
+      `update auth.sessions set created_at = now() - interval '167 hours' where id = (select id from auth.sessions where user_id = '${id}' order by created_at desc limit 1)`,
+    );
+    expireSessionLocally(withinTimebox);
+    const refreshed = await protectedStatus(withinTimebox);
+    expect(refreshed.status).toBe(200);
+    expect(sessionSetCookies(refreshed).length).toBeGreaterThan(0);
+  }, 240_000);
+
+  // Sets not_after by hand. It proves GoTrue refuses a refresh when not_after has
+  // passed, which is a separate, enforced field.
   test('a session whose not_after has passed does not refresh', async () => {
     const jar = await signIn();
     const id = userId(KNOWN);

@@ -13,21 +13,47 @@ jobs:
     name: Tenant RLS
     runs-on: ubuntu-24.04
     timeout-minutes: 10
+    # PostgreSQL 17 matches NetEOC Dev (17.11). The image is pinned by digest,
+    # so neither a runner image change nor a tag move can change the server.
+    # PostGIS 3.6 is included for the geometry work in #12. Trust authentication
+    # is acceptable here: the server exists only for this job and is not
+    # reachable from outside the runner.
+    services:
+      postgres:
+        image: postgis/postgis:17-3.6@sha256:d7053f57b0d62c427ffbf412208b6625317124d62eebf40672e990fea81e9d53
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s
+          --health-timeout 5s --health-retries 10
+    env:
+      PGHOST: localhost
+      PGPORT: '5432'
+      PGUSER: postgres
     steps:
       - name: Check out migrations and tests
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - name: Verify PostgreSQL server version
+        run: |
+          psql -X -v ON_ERROR_STOP=1 -At -c 'select version()'
+          server_version_num="$(psql -X -v ON_ERROR_STOP=1 -At -c 'show server_version_num')"
+          if [ "$server_version_num" -lt 170000 ] || [ "$server_version_num" -ge 180000 ]; then
+            echo "expected PostgreSQL 17, got server_version_num=$server_version_num" >&2
+            exit 1
+          fi
       - name: Run tenant authorization tests
         run: |
-          sudo systemctl start postgresql.service
-          sudo -u postgres psql -v ON_ERROR_STOP=1 -f tests/sql/ci-bootstrap.sql
+          psql -X -v ON_ERROR_STOP=1 -v VERBOSITY=verbose -f tests/sql/ci-bootstrap.sql
           for migration in supabase/migrations/*.sql; do
-            sudo -u postgres psql -v ON_ERROR_STOP=1 -f "$migration"
+            psql -X -v ON_ERROR_STOP=1 -v VERBOSITY=verbose -f "$migration"
           done
-          sudo -u postgres psql -v ON_ERROR_STOP=1 -f tests/sql/tenant_read_kernel.sql
-          sudo -u postgres psql -v ON_ERROR_STOP=1 -f tests/sql/operator_bootstrap.sql
-          sudo -u postgres psql -v ON_ERROR_STOP=1 -f tests/sql/maps_layer_associations.sql
+          psql -X -v ON_ERROR_STOP=1 -v VERBOSITY=verbose -f tests/sql/tenant_read_kernel.sql
+          psql -X -v ON_ERROR_STOP=1 -v VERBOSITY=verbose -f tests/sql/operator_bootstrap.sql
+          psql -X -v ON_ERROR_STOP=1 -v VERBOSITY=verbose -f tests/sql/maps_layer_associations.sql
 
   quality-security:
     name: Quality and security

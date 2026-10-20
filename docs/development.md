@@ -86,6 +86,22 @@ ESLint for JS; add `astro check`, TypeScript, and framework-aware lint when the
 application lands. Bun is the developer runtime and package manager. The
 Cloudflare deployment runtime is Workers; write Worker-compatible server code.
 
+## Database version
+
+The `tenant-rls` CI job runs the SQL authorization tests against PostgreSQL
+17.11 (`postgis/postgis:17-3.6`, pinned by digest in
+`.github/workflows/ci.yml`). NetEOC Dev runs PostgreSQL 17.11.0.003. CI tracks
+the NetEOC Dev major version: when the project moves to a new major, update the
+CI image digest and the server-version check in the same change, and rerun every
+SQL test. Do not rely on the runner's preinstalled PostgreSQL, which changes
+with the runner image.
+
+Error codes for constraint violations can differ between majors. For
+`ON DELETE RESTRICT`, PostgreSQL 16 and 17 raise `foreign_key_violation`
+(23503), while PostgreSQL 18 raises `restrict_violation` (23001). Assertions
+must match the code the pinned major raises; do not accept several codes to make
+a test pass.
+
 ## Secrets and scans
 
 `bun run secrets:staged` scans the exact staged blobs, including files that

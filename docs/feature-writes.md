@@ -57,32 +57,57 @@ route can map them one-to-one.
 | Geometry shape, coordinates, range, vertices, byte ceiling, or validity                                                     | 22023    | one message per rule, see below                                         |
 | Title, description, status, attribute, or patch bounds                                                                      | 22023    | one message per rule                                                    |
 
-The first three rows are indistinguishable by design for a caller who may not
-know the feature exists. Those callers get `42501` with one message whether the
-feature is absent, hidden in another organization, or visible to them as a
-viewer. A caller who is an admin or editor of the feature's organization learns
-only that it was deleted, because the audit trail records that deletion for
-them. A viewer or outsider never learns the revision.
+For a caller who may not know the feature exists, the first refusal row gives
+one answer: SQLSTATE `42501` and one message, whether the feature is absent,
+hidden in another organization, or visible to the caller as a viewer.
+`tests/sql/feature_edits.sql` asserts those three outcomes are identical,
+including the detail field.
 
-An unauthorized caller is refused before the payload is read. An invalid payload
-therefore cannot reveal whether a layer or feature exists.
+The answers are the same. The time they take is not proven identical. The
+latency of each case was measured in the database, with
+[`tests/perf/feature_write_timing.sql`](../tests/perf/feature_write_timing.sql):
+2,000 interleaved calls per case, on a local Supabase stack (PostgreSQL
+17.11.0.004, Apple silicon), 2026-10-20. Medians:
+
+| Operation | Absent feature or layer | Live, another organization | Live, same organization, viewer |
+| --------- | ----------------------- | -------------------------- | ------------------------------- |
+| update    | 22 us                   | 23 us                      | 22 us                           |
+| delete    | 26 us                   | 29 us                      | 28 us                           |
+| create    | 13 us                   | 14 us                      | 14 us                           |
+
+The gap is 1 to 3 microseconds, and it is not zero. This is not a constant-time
+claim, and the figures cover database time only, without network time. Run the
+script again on the target host before relying on a finer difference.
+
+A caller who is an admin or editor of the feature's organization is told that a
+deleted feature was deleted (`PT410`), because the audit trail records the
+deletion for them. That answer is different from the others by design. Its
+latency was not measured. A viewer or outsider never learns the revision, and a
+conflict is not revealed to a caller who cannot see the feature.
+
+Argument shape is checked before authorization. These checks are the feature ID,
+the expected revision, and the patch's type and size. None of them depends on
+any row, so every caller gets the same answer for them. Every answer that
+depends on the feature or layer comes after authorization, including the field
+checks. An invalid payload from an unauthorized caller gets the authorization
+refusal, so it cannot reveal whether a layer or feature exists.
 
 ## Limits
 
 The ceilings are literals in the migration. Each is enforced in the function,
 and `tests/sql/feature_edits.sql` asserts each one with a pair at the boundary.
 
-| Bound                       | Ceiling                            |
-| --------------------------- | ---------------------------------- |
-| Geometry JSON text          | 131,072 bytes                      |
-| Vertices per geometry       | 2,000                              |
-| Patch JSON text (`changes`) | 147,456 bytes                      |
-| Title                       | 1 to 120 characters, trimmed       |
-| Description                 | at most 2,000 characters           |
-| Status                      | 1 to 40 characters, trimmed        |
-| Attributes JSON text        | 4,096 bytes, a JSON object         |
-| Geometry types              | GeoJSON Point, LineString, Polygon |
-| Coordinates                 | 2D, WGS84 range, PostGIS-valid     |
+| Bound                       | Ceiling                                                                                                                           |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| Geometry JSON text          | 131,072 bytes                                                                                                                     |
+| Vertices per geometry       | 2,000                                                                                                                             |
+| Patch JSON text (`changes`) | 147,456 bytes                                                                                                                     |
+| Title                       | 1 to 120 characters, with no leading or trailing whitespace (Unicode White_Space, including tab, newline, and non-breaking space) |
+| Description                 | at most 2,000 characters                                                                                                          |
+| Status                      | 1 to 40 characters, with no leading or trailing whitespace (same set as the title)                                                |
+| Attributes JSON text        | 4,096 bytes, a JSON object                                                                                                        |
+| Geometry types              | GeoJSON Point, LineString, Polygon                                                                                                |
+| Coordinates                 | 2D, WGS84 range, PostGIS-valid                                                                                                    |
 
 The geometry ceiling is checked before any JSON shape work, and the vertex limit
 before `ST_IsValid`, which is the expensive check. Table constraints remain as a
@@ -145,9 +170,38 @@ record commit or fail together, and a cascade from a layer delete is recorded
 feature by feature. A deletion with no authenticated actor is refused, because
 it cannot be attributed.
 
-Creates and updates are not audited yet. The issue asks for access-relevant
-changes, and a feature's access is its organization and layer, which cannot
-change. Visibility tiers (#19) add their own audit entries.
+Creates and updates are deliberately not audited. The implementation contract's
+audit row lists membership, sharing, token, and deletion changes, not ordinary
+edits, and nothing in this issue changes who can read or edit a feature. A
+feature's organization and layer are immutable, so access cannot change through
+an edit. #19 adds the sharing audit when visibility tiers arrive. A later reader
+who sees no create or update record should read that as the design, not as a
+gap.
+
+## Operations and retention
+
+These consequences follow from the audit rules. They belong in the offboarding
+and retention plan (threat T12).
+
+- **A delete needs an authenticated actor.** A DELETE with no JWT actor is
+  refused, including by the table owner and the Supabase SQL editor. A layer
+  that still has features therefore cannot be deleted from the SQL editor,
+  because its cascade deletes those features with no actor. An operator must
+  remove the features through an authenticated session, one at a time, and then
+  delete the layer.
+- **TRUNCATE is refused for features.** A TRUNCATE of `features`, or a TRUNCATE
+  of `layers` with CASCADE, is refused for every role, including the owner, with
+  SQLSTATE `0A000`. TRUNCATE fires no row-level delete trigger, so it would
+  remove rows with no audit record.
+- **Restrict keys block hard deletion.** `feature_audit_events.organization_id`
+  and `actor_user_id` are `on delete restrict`. An organization that has ever
+  had a feature deleted cannot be hard-deleted. An Auth user who ever deleted a
+  feature cannot be deleted, and the existing restrict on `features.created_by`
+  already blocks a user who created one. Removing either needs a documented,
+  audited break-glass procedure. That procedure is not built here.
+- **Retention is not defined.** The audit trail keeps every deletion record. A
+  retention period, and the procedure for removing old records, are open items
+  for the retention plan.
 
 ## Atomicity
 
@@ -173,9 +227,20 @@ either Worker version runs against either schema.
   `has_column_privilege`, and `has_function_privilege`, and asserts the pinned
   search paths in `proconfig`.
 - `tests/sql/feature_edits_race.sh` runs concurrent sessions, described above.
+  It refuses to run unless `NETEOC_DISPOSABLE_DATABASE=1` is set and the server
+  reports a database name matching `^neteoc_(test|race)`. It checks both before
+  any write and before its cleanup trap is installed. The cleanup disables the
+  audit immutability trigger for one transaction, because the audit rows have to
+  go before the organization can. The trigger is restored in the same
+  transaction, and the name check is what keeps that step off a database that
+  matters. The invitation race script has the same guard.
+- `tests/sql/feature_storage.sql` restores the write grants for the rest of its
+  rolled-back transaction, so the row policies are tested as the only barrier.
+  No migration grants them. The grants stay absent from every committed schema.
 - `tests/sql/feature_edits_mutations.py` breaks each protection in a copy of the
-  migration and checks that the suite fails for the stated reason. It is run by
-  hand, not in CI, because it builds a database per mutation.
+  migration, or of the feature storage migration for the policies, and checks
+  that the suite fails for the stated reason. It is run by hand, not in CI,
+  because it builds a database per mutation.
 
 ## Deferred
 

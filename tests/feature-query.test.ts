@@ -415,3 +415,75 @@ describe('GET /api/v1/layers/{layerId}/features', () => {
     expect(response.status).toBe(503);
   });
 });
+
+// Each boundary is asserted as a pair: the accepted side and the refused side. A test
+// for one side alone lets a later edit move the other side without any failure.
+describe('cursor timestamp boundaries match PostgreSQL', () => {
+  const accepts = (createdAt: string) =>
+    decodeCursor(encodeWith({ t: createdAt }), LAYER) !== null;
+
+  test.each([
+    ['+15:59 is accepted', '2026-10-01T00:00:00+15:59', true],
+    ['+16:00 is refused', '2026-10-01T00:00:00+16:00', false],
+    ['-15:59 is accepted', '2026-10-01T00:00:00-15:59', true],
+    ['-16:00 is refused', '2026-10-01T00:00:00-16:00', false],
+    ['+23:00 is refused', '2026-10-01T00:00:00+23:00', false],
+    ['year 0001 is accepted', '0001-01-01T00:00:00+00:00', true],
+    ['year 0000 is refused', '0000-01-01T00:00:00+00:00', false],
+    ['year 0000 in Z form is refused', '0000-12-31T23:59:59Z', false],
+    ['2000-02-29 is accepted (leap)', '2000-02-29T00:00:00Z', true],
+    ['2100-02-29 is refused (not leap)', '2100-02-29T00:00:00Z', false],
+    ['2026-02-29 is refused', '2026-02-29T00:00:00Z', false],
+    ['hour 24 is refused', '2026-10-01T24:00:00Z', false],
+  ])('%s', (_, createdAt, expected) => {
+    expect(accepts(createdAt)).toBe(expected);
+  });
+});
+
+describe('forged cursors fail as client errors, not server faults', () => {
+  test.each([
+    ['offset past 15:59', '2026-10-01T00:00:00+16:00'],
+    ['year 0', '0000-01-01T00:00:00+00:00'],
+  ])(
+    'a cursor with %s is 400 invalid_cursor and never reaches the database',
+    async (_, createdAt) => {
+      const { calls, context } = routeContext({
+        query: `cursor=${encodeWith({ t: createdAt })}`,
+      });
+      const { status, body } = await read(context);
+      expect(status).toBe(400);
+      expect(body.error.code).toBe('invalid_cursor');
+      expect(calls).toHaveLength(0);
+    },
+  );
+});
+
+// The route maps only the function's own validation error (22023) to 400. Every other
+// SQLSTATE, including a date-range error from a validator gap, stays a 500 with no text.
+describe('database error mapping', () => {
+  const failing = (code: string) =>
+    routeContext({
+      rpc: () => ({
+        data: null,
+        error: { code, message: `database said ${code}` },
+      }),
+    });
+
+  test('the function’s own validation (22023) is a 400 with its fixed message', async () => {
+    const { status, body } = await read(failing('22023').context);
+    expect(status).toBe(400);
+    expect(body.error.code).toBe('invalid_request');
+    expect(body.error.message).toBe('database said 22023');
+  });
+
+  test.each([
+    ['a date-range error from a validator gap (22008)', '22008'],
+    ['a grant error (42501)', '42501'],
+    ['an unclassified error (XX000)', 'XX000'],
+  ])('%s stays a 500 with no database text', async (_, code) => {
+    const { status, body } = await read(failing(code).context);
+    expect(status).toBe(500);
+    expect(body.error.code).toBe('query_failed');
+    expect(JSON.stringify(body)).not.toContain(code);
+  });
+});

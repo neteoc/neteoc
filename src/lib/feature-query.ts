@@ -233,6 +233,12 @@ export function decodeCursor(raw: string, layerId: string): Cursor | null {
 
 // The pattern checks shape only. The calendar and clock fields must also be real,
 // so a value such as month 13 is refused here rather than failing the cast in SQL.
+// PostgreSQL has no year 0 and displaces a timestamptz by at most 15:59. The shape
+// check alone accepts both, and PostgreSQL then fails the cast with a server error.
+// These bounds are the database's own, so a value that passes here casts there.
+const MAX_OFFSET_HOURS = 15;
+const MAX_OFFSET_MINUTES = 59;
+
 function isCalendarTimestamp(value: string): boolean {
   const match = TIMESTAMP_PATTERN.exec(value);
   if (!match) return false;
@@ -242,15 +248,23 @@ function isCalendarTimestamp(value: string): boolean {
   const hour = Number(match[4]);
   const minute = Number(match[5]);
   const second = Number(match[6]);
-  const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
-  if (month < 1 || month > 12 || day < 1 || day > daysInMonth) return false;
+  if (year < 1 || month < 1 || month > 12) return false;
+  if (day < 1 || day > daysInMonth(year, month)) return false;
   if (hour > 23 || minute > 59 || second > 59) return false;
   if (
     match[9] !== undefined &&
-    (Number(match[9]) > 23 || Number(match[10]) > 59)
+    (Number(match[9]) > MAX_OFFSET_HOURS ||
+      Number(match[10]) > MAX_OFFSET_MINUTES)
   )
     return false;
   return true;
+}
+
+function daysInMonth(year: number, month: number): number {
+  const leap = (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
+  return [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][
+    month - 1
+  ];
 }
 
 function toBase64Url(text: string): string {

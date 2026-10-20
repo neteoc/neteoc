@@ -92,8 +92,14 @@ export const GET: APIRoute = async ({ params, request, locals }) => {
     p_after_id: query.cursor?.id,
     p_byte_budget: FEATURE_BYTE_BUDGET,
   });
-  // The error text is not returned. It can name database objects, and the caller
-  // needs only the failure, not the cause.
+  // SQLSTATE 22023 is the function's own validation. Its messages are fixed
+  // strings, so they are safe to return, and the request was invalid, not the server.
+  // Every other error is unexpected and stays a 500 with no database text, because
+  // it can name objects the caller should not learn about. A validator that disagrees
+  // with PostgreSQL shows up as a 500 here, which is how the gap gets noticed.
+  if (error?.code === '22023') {
+    return errorResponse(400, 'invalid_request', error.message);
+  }
   if (error || !isLayerPage(data)) {
     return errorResponse(500, 'query_failed', 'The feature query failed.');
   }

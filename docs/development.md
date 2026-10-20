@@ -149,6 +149,14 @@ CI image digest and the server-version check in the same change, and rerun every
 SQL test. Do not rely on the runner's preinstalled PostgreSQL, which changes
 with the runner image.
 
+The PostGIS image also installs PostGIS into the default database's `public`
+schema. CI therefore runs the tests in a database created from `template0`,
+which has no extensions, as a new Supabase project does. In a database where
+PostGIS already exists elsewhere,
+`create extension if not exists postgis with schema extensions` does nothing, so
+the feature migration checks the schema and stops. Run migration checks in the
+clean database.
+
 Error codes for constraint violations can differ between majors. For
 `ON DELETE RESTRICT`, PostgreSQL 16 and 17 raise `foreign_key_violation`
 (23503), while PostgreSQL 18 raises `restrict_violation` (23001). Assertions

@@ -15,7 +15,9 @@ jobs:
     timeout-minutes: 10
     # PostgreSQL 17 matches NetEOC Dev (17.11). The image is pinned by digest,
     # so neither a runner image change nor a tag move can change the server.
-    # PostGIS 3.6 is included for the geometry work in #12. Trust authentication
+    # PostGIS 3.6 is included for the feature geometry in #12. The image also
+    # installs PostGIS into the default database's public schema, so the tests
+    # run in a clean database instead (see the step below). Trust authentication
     # is acceptable here: the server exists only for this job and is not
     # reachable from outside the runner.
     services:
@@ -45,6 +47,14 @@ jobs:
             echo "expected PostgreSQL 17, got server_version_num=$server_version_num" >&2
             exit 1
           fi
+      - name: Create a clean test database
+        # A database cloned from template0 has no extensions, as a new Supabase
+        # project does. The migration then installs PostGIS into the extensions
+        # schema, and a silent no-op on the image's public copy cannot hide that.
+        # Later steps read PGDATABASE from GITHUB_ENV.
+        run: |
+          psql -X -v ON_ERROR_STOP=1 -c 'create database neteoc_test template template0'
+          echo 'PGDATABASE=neteoc_test' >> "$GITHUB_ENV"
       - name: Run tenant authorization tests
         run: |
           psql -X -v ON_ERROR_STOP=1 -v VERBOSITY=verbose -f tests/sql/ci-bootstrap.sql
@@ -55,6 +65,7 @@ jobs:
           psql -X -v ON_ERROR_STOP=1 -v VERBOSITY=verbose -f tests/sql/operator_bootstrap.sql
           psql -X -v ON_ERROR_STOP=1 -v VERBOSITY=verbose -f tests/sql/maps_layer_associations.sql
           psql -X -v ON_ERROR_STOP=1 -v VERBOSITY=verbose -f tests/sql/organization_invitations.sql
+          psql -X -v ON_ERROR_STOP=1 -v VERBOSITY=verbose -f tests/sql/feature_storage.sql
           bash tests/sql/organization_invitations_race.sh
 
   quality-security:

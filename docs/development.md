@@ -32,6 +32,36 @@ ignored `.tools/bin/` only after SHA-256 verification against
 the same verified tool versions through a trusted package manager or add checked
 archive hashes for that platform.
 
+## Local Supabase stack
+
+`supabase/config.toml` configures the local Supabase CLI stack. Start it from
+the repository root with `supabase start`, check it with `supabase status`, and
+stop it with `supabase stop`. The local Postgres is `supabase/postgres`
+17.11.0.004, which has the same PostgreSQL version (17.11) as NetEOC Dev's
+17.11.0.003 build. That makes it the first verification target for
+authentication (#7) and the SQL authorization work (#9). The local mail catcher
+on `http://127.0.0.1:54324` receives every Auth email, so one-time codes can be
+read without a real mailbox. No email leaves the machine.
+
+The CLI's defaults are permissive, and this project overrides them deliberately.
+`enable_signup` is `false` under `[auth]` because membership is invitation-only:
+an unknown address gets `422 signup_disabled`, while an existing invited user
+still receives a code. Leave `enable_signup` under `[auth.email]` set to `true`.
+That flag enables the email provider rather than new-user signup, and turning it
+off fails every sign-in with `422 email_provider_disabled`, including for
+existing users, which would disable the only sign-in method this project has.
+The Site URL and redirect allow list match the Worker preview origin, and the
+email OTP is eight digits with a 600-second expiry. Other defaults are
+inherited; `auto_expose_new_tables` matches the hosted default, so migrations
+must still revoke explicitly.
+
+Treat the running stack as untrusted on a shared network. The CLI publishes
+Postgres, Studio, the API, and the mail catcher on every host interface, the
+database password is the static `postgres`, and the printed keys, including the
+service-role key, are well-known public demo values. They are for this stack
+only. Never copy them into `.dev.vars`, never commit them, and run
+`supabase stop` when you are not using the stack.
+
 ## Commit and pull request discipline
 
 Follow

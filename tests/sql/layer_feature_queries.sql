@@ -410,4 +410,51 @@ begin
 end;
 $$;
 
+-- Timing oracle. A visible empty layer and a forbidden or nonexistent layer must return
+-- the same payload, so the empty page is one shape whichever branch produced it. The
+-- byte comparison guards the shape. The probe's effect is latency, which this test cannot
+-- observe, so removing the probe leaves it passing. tests/perf measures the latency.
+do $$
+declare
+  v_admin constant uuid := 'b1f0a9c3-2d4e-4a5b-8c6d-7e8f9a0b1c01';
+  v_member_b constant uuid := 'b1f0a9c3-2d4e-4a5b-8c6d-7e8f9a0b1c03';
+  v_empty_layer constant uuid := 'd3b2c1e0-4f60-4c7d-8e8f-9a0b1c2d3e02';
+  v_layer_a constant uuid := 'd3b2c1e0-4f60-4c7d-8e8f-9a0b1c2d3e01';
+  v_visible_empty jsonb;
+  v_forbidden jsonb;
+begin
+  set local role authenticated;
+  perform set_config('request.jwt.claim.sub', v_admin::text, true);
+  v_visible_empty := public.list_layer_features(v_empty_layer, -180, -90, 180, 90, 10, null, null, 258048);
+  perform set_config('request.jwt.claim.sub', v_member_b::text, true);
+  v_forbidden := public.list_layer_features(v_layer_a, -180, -90, 180, 90, 10, null, null, 258048);
+  reset role;
+  if v_visible_empty is distinct from v_forbidden then
+    raise exception 'a visible empty layer and a forbidden layer return different payloads';
+  end if;
+end;
+$$;
+
+-- PostgreSQL bounds for a cursor timestamp, asserted as accepted/refused pairs. The
+-- Bun validator must accept exactly these values, so a gap in either direction fails
+-- here or in tests/feature-query.test.ts.
+do $$
+declare
+  v_accepted text;
+  v_refused text;
+begin
+  foreach v_accepted in array array['2026-10-01T00:00:00+15:59', '2026-10-01T00:00:00-15:59', '0001-01-01T00:00:00+00:00'] loop
+    perform v_accepted::timestamptz;
+  end loop;
+  foreach v_refused in array array['2026-10-01T00:00:00+16:00', '2026-10-01T00:00:00-16:00', '0000-01-01T00:00:00+00:00'] loop
+    begin
+      perform v_refused::timestamptz;
+      raise exception 'PostgreSQL accepted %', v_refused;
+    exception when datetime_field_overflow or invalid_datetime_format or invalid_time_zone_displacement_value then
+      null;
+    end;
+  end loop;
+end;
+$$;
+
 rollback;

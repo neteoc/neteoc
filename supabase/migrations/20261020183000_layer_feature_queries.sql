@@ -44,6 +44,21 @@ begin
     raise exception 'cursor needs both created_at and id' using errcode = 'invalid_parameter_value';
   end if;
 
+  -- Probe the layer before reading its features. Under layers_read_member, a layer
+  -- the caller cannot read is invisible here, exactly as a missing layer is, so both
+  -- take the same path: one primary-key lookup and the empty page. Without the probe,
+  -- a forbidden layer's rows are scanned and filtered one by one under RLS, and the
+  -- extra latency reveals that the layer exists. The payload here must stay equal to
+  -- the page returned for a visible, empty layer.
+  if not exists (select 1 from public.layers as l where l.id = p_layer_id) then
+    return jsonb_build_object(
+      'features', '[]'::jsonb,
+      'has_more', false,
+      'next', null,
+      'oversized_feature_id', null
+    );
+  end if;
+
   -- The probe row (limit + 1) shows whether a further page exists without a count.
   -- Running bytes are measured on the jsonb text, so a page never exceeds the
   -- budget the API reserves for its envelope.

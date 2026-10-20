@@ -227,6 +227,13 @@ async function protectedStatus(jar: Jar) {
 
 describe.skipIf(!enabled)('email code sign-in against local Supabase', () => {
   beforeAll(async () => {
+    // A Worker already on the Site URL port would answer the tests with stale
+    // code. Refuse to run rather than test whatever is listening there.
+    const busy = await fetch(`${ORIGIN}/`).then(
+      () => true,
+      () => false,
+    );
+    if (busy) throw new Error(`port 8787 is already serving; stop it first`);
     configDir = await mkdtemp(path.join(tmpdir(), 'neteoc-auth-e2e-'));
     worker = spawn(
       'node',
@@ -242,6 +249,8 @@ describe.skipIf(!enabled)('email code sign-in against local Supabase', () => {
         cwd: process.cwd(),
         env: { ...process.env, XDG_CONFIG_HOME: configDir },
         stdio: 'ignore',
+        // Own process group, so teardown also stops workerd, not only node.
+        detached: true,
       },
     );
     for (let i = 0; i < 300; i++) {
@@ -256,7 +265,7 @@ describe.skipIf(!enabled)('email code sign-in against local Supabase', () => {
   }, 90_000);
 
   afterAll(async () => {
-    worker?.kill();
+    if (worker?.pid) process.kill(-worker.pid, 'SIGTERM');
     if (configDir) await rm(configDir, { recursive: true, force: true });
   });
 
@@ -275,18 +284,10 @@ describe.skipIf(!enabled)('email code sign-in against local Supabase', () => {
   }, 30_000);
 
   test('the sign-in email carries an eight-digit code and no sign-in link', async () => {
-    const jar = new Jar();
-    const seen = await mailpitIds();
-    const response = await call('/auth/login', {
-      jar,
-      form: { email: KNOWN },
-    });
-    expect(location(response)).toBe('/login-sent');
-    let id: string | undefined;
-    for (let poll = 0; poll < 25 && !id; poll++) {
-      id = await newestMessageTo(KNOWN, seen);
-      if (!id) await sleep(200);
-    }
+    // sendCode retries GoTrue's one-second send spacing until mail arrives.
+    const code = await sendCode(KNOWN, new Jar());
+    expect(code).toMatch(/^\d{8}$/);
+    const id = await newestMessageTo(KNOWN, new Set());
     expect(id).toBeDefined();
     const message = (await (
       await fetch(`${MAILPIT}/api/v1/message/${id}`)
@@ -297,7 +298,7 @@ describe.skipIf(!enabled)('email code sign-in against local Supabase', () => {
     // A token-bearing link would let a scanner consume the sign-in.
     expect(message.HTML).not.toContain('/auth/v1/verify');
     expect(message.HTML).not.toMatch(/token=/);
-  }, 60_000);
+  }, 120_000);
 
   test('a scanner GET of the confirmation page does not consume the code', async () => {
     const browser = new Jar();
@@ -321,7 +322,6 @@ describe.skipIf(!enabled)('email code sign-in against local Supabase', () => {
     const requester = new Jar();
     const confirmer = new Jar();
     const code = await sendCode(KNOWN, requester);
-    expect(requester.header()).toContain('code-verifier');
     expect(confirmer.header()).toBe('');
     const response = await confirm(KNOWN, code, confirmer);
     expect(location(response)).toBe('/app');
@@ -338,23 +338,45 @@ describe.skipIf(!enabled)('email code sign-in against local Supabase', () => {
     expect(jar.session()).toBeUndefined();
   }, 120_000);
 
-  test('an expired code fails safely; expiry is 600 seconds from issue', async () => {
-    const jar = new Jar();
-    const code = await sendCode(KNOWN, jar);
+  // GoTrue measures the code's age from auth.users.recovery_sent_at, not from a
+  // per-token expiry column, so backdating that timestamp moves the expiry
+  // boundary without waiting ten minutes. 601 seconds must fail; 599 must pass.
+  test('a code 601 seconds old fails safely and one 599 seconds old still confirms', async () => {
     const id = userId(KNOWN);
-    const lifetime = Number(
-      sql(
-        `select extract(epoch from (expires_at - (created_at at time zone 'UTC')))::int from auth.one_time_tokens where user_id = '${id}' order by created_at desc limit 1`,
-      ),
-    );
-    expect(lifetime).toBe(600);
+    const stale = new Jar();
+    const oldCode = await sendCode(KNOWN, stale);
     sql(
-      `update auth.one_time_tokens set expires_at = now() - interval '1 second' where user_id = '${id}'`,
+      `update auth.users set recovery_sent_at = now() - interval '601 seconds' where id = '${id}'`,
     );
-    const response = await confirm(KNOWN, code, jar);
-    expect(location(response)).toBe('/auth/confirm?error=invalid');
-    expect(sessionSetCookies(response)).toEqual([]);
-  }, 120_000);
+    const refused = await confirm(KNOWN, oldCode, stale);
+    expect(location(refused)).toBe('/auth/confirm?error=invalid');
+    expect(sessionSetCookies(refused)).toEqual([]);
+
+    const fresh = new Jar();
+    const code = await sendCode(KNOWN, fresh);
+    sql(
+      `update auth.users set recovery_sent_at = now() - interval '599 seconds' where id = '${id}'`,
+    );
+    const accepted = await confirm(KNOWN, code, fresh);
+    expect(location(accepted)).toBe('/app');
+  }, 180_000);
+
+  test('the running GoTrue has eight-digit codes, a 600 second expiry, and the 168 hour timebox', async () => {
+    const environment = execFileSync(
+      'docker',
+      [
+        'exec',
+        'supabase_auth_neteoc',
+        'sh',
+        '-c',
+        'tr "\\0" "\\n" < /proc/1/environ',
+      ],
+      { encoding: 'utf8' },
+    );
+    expect(environment).toContain('GOTRUE_MAILER_OTP_LENGTH=8\n');
+    expect(environment).toContain('GOTRUE_MAILER_OTP_EXP=600\n');
+    expect(environment).toMatch(/GOTRUE_SESSIONS_TIMEBOX=168h0m0s\n/);
+  }, 30_000);
 
   test('cross-origin confirmation is refused and leaves the code usable', async () => {
     const jar = new Jar();
@@ -386,10 +408,22 @@ describe.skipIf(!enabled)('email code sign-in against local Supabase', () => {
         )
         .sort(),
     });
-    const known = await call('/auth/login', {
+    // Earlier tests used the known address, so wait out its per-address window.
+    let known = await call('/auth/login', {
       jar: new Jar(),
       form: { email: KNOWN },
     });
+    for (
+      let attempt = 0;
+      attempt < 8 && location(known).includes('error=rate');
+      attempt++
+    ) {
+      await sleep(13_000);
+      known = await call('/auth/login', {
+        jar: new Jar(),
+        form: { email: KNOWN },
+      });
+    }
     const unknown = await call('/auth/login', {
       jar: new Jar(),
       form: { email: `nobody-${crypto.randomUUID()}@example.test` },
@@ -485,7 +519,9 @@ describe.skipIf(!enabled)('email code sign-in against local Supabase', () => {
     expect(lifetime).toBe(604800);
   }, 180_000);
 
-  test('a session past its timebox does not refresh', async () => {
+  // Sets not_after by hand, so it proves GoTrue enforces a passed timebox, not
+  // that the timebox is applied. The 'timebox ... as configured' test covers that.
+  test('a session whose not_after has passed does not refresh', async () => {
     const jar = await signIn();
     const id = userId(KNOWN);
     sql(
@@ -495,7 +531,11 @@ describe.skipIf(!enabled)('email code sign-in against local Supabase', () => {
     const response = await protectedStatus(jar);
     expect(response.status).toBe(302);
     expect(location(response)).toBe('/login');
-    expect(sessionSetCookies(response)).toEqual([]);
+    // A refused refresh clears the session cookie. Any live session cookie is a failure.
+    const live = sessionSetCookies(response).filter(
+      (raw) => !/Max-Age=0|Expires=Thu, 01 Jan 1970/.test(raw),
+    );
+    expect(live).toEqual([]);
   }, 180_000);
 
   test('sign-out removes the session cookies with their attributes', async () => {

@@ -11,6 +11,7 @@ const root = path.resolve(import.meta.dir, '..');
 interface AuthConfig {
   auth: {
     enable_signup: boolean;
+    minimum_password_length: number;
     email: {
       enable_signup: boolean;
       otp_length: number;
@@ -43,6 +44,10 @@ describe('local Auth configuration', () => {
   test('email codes are eight digits and expire after 600 seconds', () => {
     expect(config.auth.email.otp_length).toBe(8);
     expect(config.auth.email.otp_expiry).toBe(600);
+  });
+
+  test('password setup requires at least 12 characters', () => {
+    expect(config.auth.minimum_password_length).toBe(12);
   });
 
   test('sessions end seven days after sign-in and the value parses as a Go duration', () => {

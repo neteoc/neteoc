@@ -184,7 +184,10 @@ async function codeFromMessage(id: string): Promise<string> {
 async function sendCode(email: string, jar: Jar): Promise<string> {
   for (let attempt = 0; attempt < 8; attempt++) {
     const seen = await mailpitIds();
-    const response = await call('/auth/login', { jar, form: { email } });
+    const response = await call('/auth/request-code-submit', {
+      jar,
+      form: { email },
+    });
     const target = location(response);
     if (target.includes('error=rate')) {
       await sleep(13_000);
@@ -216,7 +219,7 @@ async function signIn(): Promise<Jar> {
   const jar = new Jar();
   const code = await sendCode(KNOWN, jar);
   const response = await confirm(KNOWN, code, jar);
-  expect(location(response)).toBe('/app');
+  expect(location(response)).toBe('/auth/set-password');
   expect(jar.session()).toBeDefined();
   return jar;
 }
@@ -283,6 +286,27 @@ describe.skipIf(!enabled)('email code sign-in against local Supabase', () => {
     expect(settings.external.email).toBe(true);
   }, 30_000);
 
+  test('a code user sets a password and signs in with it after sign-out', async () => {
+    const jar = await signIn();
+    const password = 'synthetic-long-password-2026';
+    const saved = await call('/auth/set-password', {
+      jar,
+      form: { password, confirm_password: password },
+    });
+    expect(location(saved)).toBe('/app');
+    const signedOut = await call('/auth/logout', { jar, form: {} });
+    expect(location(signedOut)).toBe('/login');
+    expect(jar.session()).toBeUndefined();
+
+    const signedIn = await call('/auth/login', {
+      jar,
+      form: { email: KNOWN, password },
+    });
+    expect(location(signedIn)).toBe('/app');
+    expect(jar.session()).toBeDefined();
+    expect((await protectedStatus(jar)).status).toBe(200);
+  }, 120_000);
+
   test('the sign-in email carries an eight-digit code and no sign-in link', async () => {
     // sendCode retries GoTrue's one-second send spacing until mail arrives.
     const code = await sendCode(KNOWN, new Jar());
@@ -312,7 +336,7 @@ describe.skipIf(!enabled)('email code sign-in against local Supabase', () => {
     expect(preview.headers.getSetCookie()).toEqual([]);
     expect(await preview.text()).not.toContain(code);
     const response = await confirm(KNOWN, code, browser);
-    expect(location(response)).toBe('/app');
+    expect(location(response)).toBe('/auth/set-password');
     const session = sessionSetCookies(response);
     expect(session.length).toBeGreaterThan(0);
     for (const raw of session) expectSessionAttributes(raw);
@@ -324,7 +348,7 @@ describe.skipIf(!enabled)('email code sign-in against local Supabase', () => {
     const code = await sendCode(KNOWN, requester);
     expect(confirmer.header()).toBe('');
     const response = await confirm(KNOWN, code, confirmer);
-    expect(location(response)).toBe('/app');
+    expect(location(response)).toBe('/auth/set-password');
     expect(confirmer.session()).toBeDefined();
   }, 120_000);
 
@@ -358,7 +382,7 @@ describe.skipIf(!enabled)('email code sign-in against local Supabase', () => {
       `update auth.users set recovery_sent_at = now() - interval '599 seconds' where id = '${id}'`,
     );
     const accepted = await confirm(KNOWN, code, fresh);
-    expect(location(accepted)).toBe('/app');
+    expect(location(accepted)).toBe('/auth/set-password');
   }, 180_000);
 
   test('the running GoTrue has eight-digit codes, a 600 second expiry, and the 168 hour timebox', async () => {
@@ -385,7 +409,7 @@ describe.skipIf(!enabled)('email code sign-in against local Supabase', () => {
     expect(refused.status).toBe(403);
     expect(sessionSetCookies(refused)).toEqual([]);
     const response = await confirm(KNOWN, code, jar);
-    expect(location(response)).toBe('/app');
+    expect(location(response)).toBe('/auth/set-password');
   }, 120_000);
 
   test('known and unknown addresses get the same status, redirect, headers and cookies', async () => {
@@ -409,7 +433,7 @@ describe.skipIf(!enabled)('email code sign-in against local Supabase', () => {
         .sort(),
     });
     // Earlier tests used the known address, so wait out its per-address window.
-    let known = await call('/auth/login', {
+    let known = await call('/auth/request-code-submit', {
       jar: new Jar(),
       form: { email: KNOWN },
     });
@@ -419,12 +443,12 @@ describe.skipIf(!enabled)('email code sign-in against local Supabase', () => {
       attempt++
     ) {
       await sleep(13_000);
-      known = await call('/auth/login', {
+      known = await call('/auth/request-code-submit', {
         jar: new Jar(),
         form: { email: KNOWN },
       });
     }
-    const unknown = await call('/auth/login', {
+    const unknown = await call('/auth/request-code-submit', {
       jar: new Jar(),
       form: { email: `nobody-${crypto.randomUUID()}@example.test` },
     });
@@ -444,7 +468,7 @@ describe.skipIf(!enabled)('email code sign-in against local Supabase', () => {
       ['probe+tag@example.test', '/login-sent'],
     ];
     for (const [email, expected] of cases) {
-      const response = await call('/auth/login', {
+      const response = await call('/auth/request-code-submit', {
         form: { email },
         client: `198.51.100.${Math.floor(Math.random() * 200)}`,
       });

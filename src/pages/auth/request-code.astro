@@ -1,0 +1,44 @@
+---
+const available = Boolean(Astro.locals.supabase);
+const error = Astro.url.searchParams.get('error');
+const message =
+  error === 'rate'
+    ? 'Please wait before requesting another code.'
+    : error === 'unavailable'
+      ? 'Email is temporarily unavailable. Please try again later.'
+      : 'Enter a valid email address.';
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <title>Set password | NetEOC</title>
+  </head>
+  <body>
+    <main>
+      <h1>Set or reset your password</h1>
+      {available ? (
+        <>
+          <p>We'll email a code to verify your address.</p>
+          {error && <p role="alert">{message}</p>}
+          <form method="post" action="/auth/request-code-submit">
+            <label for="email">Email address</label>
+            <input
+              id="email"
+              name="email"
+              type="email"
+              autocomplete="email"
+              required
+            />
+            <button type="submit">Email a code</button>
+          </form>
+        </>
+      ) : (
+        <p>Password setup is temporarily unavailable.</p>
+      )}
+    </main>
+  </body>
+</html>

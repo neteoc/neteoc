@@ -51,8 +51,19 @@ assert(
 
 const confirmation = await request('/auth/confirm');
 assert(confirmation.status === 200, 'confirmation page must render');
+const login = await request('/login');
+assert(login.status === 200, 'password login page must render');
+assert(
+  (await login.text()).includes('autocomplete="current-password"'),
+  'login must ask for a password',
+);
 
-for (const path of ['/auth/login', '/auth/confirm']) {
+for (const path of [
+  '/auth/login',
+  '/auth/request-code-submit',
+  '/auth/confirm',
+  '/auth/set-password',
+]) {
   const response = await request(path, {
     method: 'POST',
     headers: {

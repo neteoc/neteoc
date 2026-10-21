@@ -94,13 +94,20 @@ try {
   const confirmPage = await fetch(`${origin}/auth/confirm`);
   assert(confirmPage.status === 200, 'confirmation form must render');
   const confirmHtml = await confirmPage.text();
+  const loginPage = await fetch(`${origin}/login`);
+  assert(loginPage.status === 200, 'password sign-in page must render');
   assert(
     /name="token"[^>]*pattern="\[0-9\]\{8\}"[^>]*maxlength="8"/.test(
       confirmHtml,
     ),
     'confirmation form must accept eight-digit codes',
   );
-  for (const route of ['/auth/login', '/auth/confirm']) {
+  for (const route of [
+    '/auth/login',
+    '/auth/request-code-submit',
+    '/auth/confirm',
+    '/auth/set-password',
+  ]) {
     const response = await fetch(`${origin}${route}`, {
       method: 'POST',
       headers: {

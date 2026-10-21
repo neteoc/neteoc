@@ -18,7 +18,7 @@ mock.module('cloudflare:workers', () => ({
   },
 }));
 
-const { POST } = await import('../src/pages/auth/login');
+const { POST } = await import('../src/pages/auth/request-code-submit');
 
 const EMAIL = 'member@example.test';
 
@@ -44,18 +44,21 @@ function context(
   supabase: unknown,
   background: Promise<unknown>[],
 ) {
-  const request = new Request('http://localhost:8787/auth/login', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      'CF-Connecting-IP': '198.51.100.20',
-      Origin: 'http://localhost:8787',
+  const request = new Request(
+    'http://localhost:8787/auth/request-code-submit',
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'CF-Connecting-IP': '198.51.100.20',
+        Origin: 'http://localhost:8787',
+      },
+      body: new URLSearchParams({ email }).toString(),
     },
-    body: new URLSearchParams({ email }).toString(),
-  });
+  );
   return {
     request,
-    url: new URL('http://localhost:8787/auth/login'),
+    url: new URL('http://localhost:8787/auth/request-code-submit'),
     locals: {
       supabase,
       cfContext: {
@@ -197,7 +200,9 @@ describe('rate limits stay synchronous', () => {
     const supabase = fakeSupabase(async () => ({ error: null }));
     const background: Promise<unknown>[] = [];
     const response = await POST(context(EMAIL, supabase, background) as never);
-    expect(response.headers.get('location')).toBe('/login?error=rate');
+    expect(response.headers.get('location')).toBe(
+      '/auth/request-code?error=rate',
+    );
     expect(supabase.calls).toHaveLength(0);
     expect(background).toHaveLength(0);
   });

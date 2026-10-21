@@ -59,6 +59,20 @@ export async function readLoginEmail(request: Request): Promise<string | null> {
   return normalizeLoginEmail(form);
 }
 
+export async function readPasswordLogin(
+  request: Request,
+): Promise<{ email: string; password: string } | null> {
+  const form = await readSmallForm(request);
+  if (!form) return null;
+  const email = normalizeLoginEmail(form);
+  const passwords = form.getAll('password');
+  if (!email || passwords.length !== 1) return null;
+  const password = passwords[0];
+  if (!password || new TextEncoder().encode(password).byteLength > 1024)
+    return null;
+  return { email, password };
+}
+
 export function normalizeLoginEmail(form: URLSearchParams): string | null {
   const values = form.getAll('email');
   if (values.length !== 1) return null;

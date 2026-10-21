@@ -1,8 +1,26 @@
 # Authentication setup for the runtime slice
 
-The current shell signs in existing Supabase Auth users only. Organization
-invitations and membership checks are a later MVP slice. Do not enable public
-self-signup for a connected project.
+The current shell signs in existing Supabase Auth users with an email address
+and password. Organization invitations and membership checks are a later MVP
+slice. Do not enable public self-signup for a connected project.
+
+## Password sign-in and setup
+
+`POST /auth/login` validates a bounded form, applies the existing IP, email, and
+global rate limits, and calls `signInWithPassword` through the cookie-backed
+server client. Unknown accounts and incorrect passwords receive the same
+message. The route does not sign up users or log passwords. Supabase Auth
+enforces a 12-character minimum for passwords in the local configuration; set
+the same minimum in NetEOC Dev's hosted Auth password settings before deploying
+this change.
+
+Existing email-code users may have no password. The “Set or reset your password”
+link requests the existing code with `shouldCreateUser: false`, verifies it in a
+POST, and opens `/auth/set-password` in the new session. `updateUser` changes
+the password. A signed-in user can also change it from the workspace. This keeps
+account creation closed while giving existing users a way to set a password. The
+code flow remains available for password recovery; it must keep its own rate
+limits, no-store headers, and same-origin POST protection.
 
 ## Worker bindings
 
@@ -23,7 +41,7 @@ The development/preview project is
 from Project Settings → API Keys; never commit the key or substitute a
 service-role key. The local `.dev.vars` file is ignored by Git.
 
-## Sign-in email template
+## Password setup email template
 
 Configure the Supabase **Magic Link** email template for each connected project.
 Use the one-time code variable instead of Supabase's default verification link:
@@ -40,12 +58,12 @@ apart. The CLI default is a "Your sign-in link" message with a token-bearing
 link and no code, so it must not be used.
 
 Allow the exact `/auth/confirm` URL in the project's Auth redirect allow list.
-The sign-in route sets `emailRedirectTo` to that URL. The email link carries no
-credential; the user enters the code and email address on the confirmation page.
-`verifyOtp` runs in a same-origin POST. This works across browsers and devices,
-and email link scanners cannot consume the code through a GET. Keep codes out of
-request logs and do not add third-party assets or analytics to the confirmation
-page.
+The password setup route sets `emailRedirectTo` to that URL. The email link
+carries no credential; the user enters the code and email address on the
+confirmation page. `verifyOtp` runs in a same-origin POST. This works across
+browsers and devices, and email link scanners cannot consume the code through a
+GET. Keep codes out of request logs and do not add third-party assets or
+analytics to the confirmation page.
 
 The development project's Site URL is `http://localhost:8787`, and its redirect
 allow list includes exactly `http://localhost:8787/auth/confirm`. Configure a

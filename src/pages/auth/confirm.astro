@@ -65,7 +65,7 @@ if (Astro.request.method === 'POST') {
     console.error('auth_verify_provider_unreachable');
     return Astro.redirect('/auth/confirm?error=unavailable', 303);
   }
-  return Astro.redirect('/app', 303);
+  return Astro.redirect('/auth/set-password', 303);
 }
 ---
 
@@ -79,8 +79,8 @@ if (Astro.request.method === 'POST') {
   </head>
   <body>
     <main>
-      <h1>Confirm sign in</h1>
-      <p>Enter the email address and code from your sign-in email.</p>
+      <h1>Verify your email</h1>
+      <p>Enter the email address and code from your verification email.</p>
       {errorMessage && <p role="alert">{errorMessage}</p>}
       <form method="post" action="/auth/confirm">
         <label for="email">Email address</label>
@@ -91,7 +91,7 @@ if (Astro.request.method === 'POST') {
           autocomplete="email"
           required
         />
-        <label for="token">Sign-in code</label>
+        <label for="token">Verification code</label>
         <input
           id="token"
           name="token"

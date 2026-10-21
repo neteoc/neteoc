@@ -6,6 +6,7 @@ import {
   EMAIL_OTP_PATTERN,
   isValidEmailOtp,
   readLoginEmail,
+  readPasswordLogin,
   readSmallForm,
 } from '../src/lib/login';
 
@@ -36,6 +37,27 @@ describe('login input boundary', () => {
     ).toBeNull();
     expect(await readSmallForm(formRequest('x'.repeat(4097)))).toBeNull();
   });
+});
+
+test('password login requires one bounded password', async () => {
+  expect(
+    await readPasswordLogin(
+      formRequest('email=user%40example.org&password=secret'),
+    ),
+  ).toEqual({ email: 'user@example.org', password: 'secret' });
+  expect(
+    await readPasswordLogin(formRequest('email=user%40example.org')),
+  ).toBeNull();
+  expect(
+    await readPasswordLogin(
+      formRequest('email=user%40example.org&password=a&password=b'),
+    ),
+  ).toBeNull();
+  expect(
+    await readPasswordLogin(
+      formRequest(`email=user%40example.org&password=${'x'.repeat(1100)}`),
+    ),
+  ).toBeNull();
 });
 
 test('email OTP input and server validation share the configured length', () => {
